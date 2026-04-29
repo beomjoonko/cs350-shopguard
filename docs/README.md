@@ -9,7 +9,7 @@ This repository is a **monorepo skeleton** generated from the ShopGuard SRS v1.0
 ```
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │   Frontend   │◄────►│   Backend    │◄────►│   AI Worker  │
-│  (Next.js)   │ HTTP │  (FastAPI)   │ Queue│   (Python)   │
+│   (React)    │ HTTP │  (FastAPI)   │ Queue│   (Python)   │
 └──────────────┘      └──────┬───────┘      └──────┬───────┘
                              │                     │
                       ┌──────▼─────────────────────▼───────┐

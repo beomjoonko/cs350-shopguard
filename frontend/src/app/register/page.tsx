@@ -27,32 +27,65 @@ export default function RegisterPage() {
   }
 
   return (
-    <section className="mx-auto max-w-sm space-y-4">
-      <h1 className="text-2xl font-bold">Create account</h1>
-      <form onSubmit={onSubmit} className="space-y-3">
-        <input
-          type="email" required value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="w-full rounded border border-slate-300 px-3 py-2"
-        />
-        <input
-          type="password" required minLength={8} value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password (min. 8 chars, with numbers and special chars)"
-          className="w-full rounded border border-slate-300 px-3 py-2"
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit" disabled={submitting}
-          className="w-full rounded bg-slate-900 px-4 py-2 text-white disabled:bg-slate-400"
-        >
-          {submitting ? "Creating…" : "Create account"}
-        </button>
-      </form>
-      <p className="text-sm text-slate-600">
-        Already have an account? <Link href="/login" className="underline">Sign in</Link>
-      </p>
+    <section className="mx-auto mt-8 max-w-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6 flex flex-col items-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
+            <svg className="h-7 w-7 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+            </svg>
+          </div>
+          <h1 className="mt-3 text-xl font-bold text-slate-900">Create your account</h1>
+          <p className="mt-1 text-sm text-slate-500">Join ShopGuard to protect yourself</p>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 8 chars with numbers and special chars"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300"
+          >
+            {submitting ? "Creating…" : "Create Account"}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center text-sm text-slate-500">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-blue-600 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </section>
   );
 }

@@ -2,51 +2,298 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { Report, User } from "@/types";
+import type { Report, ReportStatus, User } from "@/types";
+
+type Tab = "reports" | "account";
+
+const STATUS_FILTERS: { label: string; value: ReportStatus | "ALL" }[] = [
+  { label: "All",      value: "ALL" },
+  { label: "Pending",  value: "PENDING" },
+  { label: "Approved", value: "ACTIVE" },
+  { label: "Hidden",   value: "HIDDEN" },
+];
+
+const STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  PENDING:        { label: "Pending",      bg: "bg-amber-100",  text: "text-amber-800" },
+  SUBMITTED:      { label: "Submitted",    bg: "bg-blue-100",   text: "text-blue-800" },
+  ACTIVE:         { label: "Approved",     bg: "bg-green-100",  text: "text-green-800" },
+  UNDER_REVIEW:   { label: "Under Review", bg: "bg-purple-100", text: "text-purple-800" },
+  VERIFIED:       { label: "Verified",     bg: "bg-green-100",  text: "text-green-800" },
+  BLINDED_DELETED:{ label: "Removed",      bg: "bg-slate-100",  text: "text-slate-600" },
+  HIDDEN:         { label: "Hidden",       bg: "bg-slate-100",  text: "text-slate-600" },
+  DRAFT:          { label: "Draft",        bg: "bg-slate-100",  text: "text-slate-500" },
+};
+
+const FRAUD_LABEL: Record<string, string> = {
+  NON_DELIVERY:          "Non-delivery of Goods",
+  FALSE_ADVERTISING:     "False Advertising",
+  REFUSAL_OF_REFUND:     "Refusal of Refund",
+  DEFECTIVE_PRODUCTS:    "Defective Products",
+  PERSONAL_DATA_LEAKAGE: "Personal Data Leakage",
+  OTHERS:                "Others",
+};
 
 export default function MyPage() {
+  const [tab, setTab] = useState<Tab>("reports");
+  const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
+
   const [user, setUser] = useState<User | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // password change state
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
 
   useEffect(() => {
     Promise.all([api.me(), api.myReports()])
       .then(([u, r]) => { setUser(u); setReports(r); })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setLoadError(String(e)));
   }, []);
 
-  if (error) return <p className="text-red-600">{error}</p>;
-  if (!user) return <p>Loading…</p>;
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(false);
+    setPwSubmitting(true);
+    try {
+      await api.changePassword(currentPw, newPw);
+      setPwSuccess(true);
+      setCurrentPw("");
+      setNewPw("");
+      setShowPwForm(false);
+    } catch (e) {
+      setPwError(String(e));
+    } finally {
+      setPwSubmitting(false);
+    }
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        {loadError} — please <a href="/login" className="underline">sign in</a>.
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-40 animate-pulse rounded-lg bg-slate-200" />
+        <div className="h-24 w-full animate-pulse rounded-xl bg-slate-200" />
+        <div className="h-32 w-full animate-pulse rounded-xl bg-slate-200" />
+      </div>
+    );
+  }
+
+  const filteredReports =
+    statusFilter === "ALL"
+      ? reports
+      : reports.filter((r) => r.status === statusFilter);
+
+  const countFor = (v: ReportStatus | "ALL") =>
+    v === "ALL" ? reports.length : reports.filter((r) => r.status === v).length;
 
   return (
     <section className="space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">My Page</h1>
-        <p className="text-sm text-slate-600">Manage your information and reports</p>
+        <h1 className="text-2xl font-bold text-slate-900">My Page</h1>
+        <p className="mt-1 text-sm text-slate-500">Manage your information and reports</p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <p className="text-sm text-slate-500">Account</p>
-        <p className="font-medium">{user.email}</p>
-        <p className="text-xs text-slate-500">Role: {user.role}</p>
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        {(["reports", "account"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              tab === t
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {t === "reports" ? (
+              <>
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                My Reports ({reports.length})
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                Account Information
+              </>
+            )}
+          </button>
+        ))}
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold">My Reports ({reports.length})</h2>
-        <ul className="mt-3 space-y-3">
-          {reports.length === 0 && <li className="text-sm text-slate-500">No reports yet.</li>}
-          {reports.map((r) => (
-            <li key={r.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between">
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{r.status}</span>
-                <span className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
+      {/* My Reports tab */}
+      {tab === "reports" && (
+        <div className="space-y-4">
+          {/* Status filter pills */}
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  statusFilter === f.value
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {f.label}
+                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-xs">
+                  {countFor(f.value)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Report list */}
+          {filteredReports.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white py-12 text-center text-sm text-slate-400 shadow-sm">
+              No reports found.
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {filteredReports.map((r) => {
+                const badge = STATUS_BADGE[r.status] ?? STATUS_BADGE.DRAFT;
+                return (
+                  <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.bg} ${badge.text}`}>
+                        {badge.label}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(r.created_at).toLocaleDateString("en-US", {
+                          year: "numeric", month: "short", day: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">
+                      Report Type: {FRAUD_LABEL[r.fraud_type] ?? r.fraud_type}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600 line-clamp-2">{r.description}</p>
+                    {r.evidence_image_url && (
+                      <a
+                        href={r.evidence_image_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                      >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                        View Evidence
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Account tab */}
+      {tab === "account" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-700">Account Details</h2>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Email</label>
+                <input
+                  type="email"
+                  readOnly
+                  value={user.email}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700"
+                />
               </div>
-              <p className="mt-1 text-sm text-slate-600">Type: {r.fraud_type}</p>
-              <p className="mt-2">{r.description}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Role</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={user.role}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Account Status</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={user.status}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Password change */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Change Password</h2>
+              <button
+                onClick={() => { setShowPwForm(!showPwForm); setPwError(null); setPwSuccess(false); }}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                {showPwForm ? "Cancel" : "Change"}
+              </button>
+            </div>
+
+            {pwSuccess && (
+              <p className="mt-2 text-sm text-green-700">Password changed successfully.</p>
+            )}
+
+            {showPwForm && (
+              <form onSubmit={changePassword} className="mt-4 space-y-3">
+                <input
+                  type="password"
+                  required
+                  placeholder="Current password"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  placeholder="New password (min. 8 chars, with numbers and special chars)"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+                {pwError && <p className="text-sm text-red-600">{pwError}</p>}
+                <button
+                  type="submit"
+                  disabled={pwSubmitting}
+                  className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300"
+                >
+                  {pwSubmitting ? "Saving…" : "Save New Password"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
