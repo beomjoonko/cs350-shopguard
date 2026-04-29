@@ -1,0 +1,34 @@
+# ─── Web framework ──────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.0
+
+# ─── Database ───────────────────────────────────────────────
+sqlalchemy==2.0.36
+alembic==1.13.3
+pymysql==1.1.1
+cryptography==43.0.3   # required by pymysql for auth
+
+# ─── Cache / Queue ──────────────────────────────────────────
+redis==5.1.1
+
+# ─── Security (SRS §5.3) ────────────────────────────────────
+argon2-cffi==23.1.0
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.12
+
+# ─── Rate limiting (SRS §4.8) ───────────────────────────────
+slowapi==0.1.9
+
+# ─── Object storage (S3 for evidence images, SRS §3.3) ──────
+boto3==1.35.50
+
+# ─── Email / notifications ──────────────────────────────────
+aiosmtplib==3.0.2
+
+# ─── Dev / testing ──────────────────────────────────────────
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.27.2
+ruff==0.7.1

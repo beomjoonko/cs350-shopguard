@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "ai-worker"
+		},
+		{
+			"path": "backend"
+		},
+		{
+			"path": "docs"
+		},
+		{
+			"path": "frontend"
+		},
+		{
+			"path": "infra"
+		}
+	],
+	"settings": {}
+}
