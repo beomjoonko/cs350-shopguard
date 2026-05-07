@@ -88,7 +88,7 @@ def process_job(job: dict, db: Session, r: redis.Redis) -> None:
         _set_job_status(db, job_id, "ANALYZING")
         cleaned = preprocess(raw)
         features = extract_features(cleaned)
-        ai_score = compute_ai_score(features)
+        ai_score = compute_ai_score(features, url)
 
         report_count = _count_active_reports(db, url_id)
         final_score = compute_final_risk_score(
