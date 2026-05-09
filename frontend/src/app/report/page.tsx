@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useLayoutEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import type { FraudType } from "@/types";
 
 const FRAUD_TYPES: { value: FraudType; label: string }[] = [
@@ -17,6 +18,7 @@ const FRAUD_TYPES: { value: FraudType; label: string }[] = [
 function ReportForm() {
   const params = useSearchParams();
   const router = useRouter();
+  const queryString = params.toString();
 
   const [url, setUrl] = useState(params.get("url") ?? "");
   const [fraudType, setFraudType] = useState<FraudType>("NON_DELIVERY");
@@ -26,9 +28,19 @@ function ReportForm() {
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!getToken()) {
+      const next = queryString ? `/report?${queryString}` : "/report";
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    setAuthReady(true);
+  }, [queryString, router]);
 
   const descOk = description.trim().length >= 20;
-  const canSubmit = consent && url.trim() !== "" && descOk && !submitting;
+  const canSubmit = authReady && consent && url.trim() !== "" && descOk && !submitting;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,6 +68,15 @@ function ReportForm() {
     setDragging(false);
     const text = e.dataTransfer.getData("text/plain");
     if (text) setEvidenceImageUrl(text);
+  }
+
+  if (!authReady) {
+    return (
+      <section className="mx-auto max-w-xl py-12">
+        <div className="h-10 w-56 animate-pulse rounded-lg bg-slate-200" />
+        <div className="mt-6 h-32 animate-pulse rounded-xl bg-slate-100" />
+      </section>
+    );
   }
 
   return (

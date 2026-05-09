@@ -26,7 +26,8 @@ class Url(Base):
     __tablename__ = "urls"
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    normalized_url = Column(String(2048), unique=True, nullable=False, index=True)
+    # Keep this indexable under MySQL utf8mb4 index-size limits.
+    normalized_url = Column(String(768), unique=True, nullable=False, index=True)
     current_risk_score = Column(Integer, nullable=True)  # 0–100, SRS §4.7 REQ-3
     current_risk_level = Column(Enum(RiskLevel), nullable=True)
     last_analyzed_at = Column(DateTime, nullable=True)
