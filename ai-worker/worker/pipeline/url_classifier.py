@@ -70,12 +70,32 @@ tld_popularity                      115    0.11%  115 differ
 suspicious_file_extension          1801    1.78%  1801 differ
 domain_name_length                    8    0.01%  8 differ
 percentage_numeric_chars              0    0.00%  OK
+
+Feature Name	Description
+URL	The full URL string.
+url_length	-   Total number of characters in the URL.
+has_ip_address  -	Binary flag (1/0): whether the URL contains an IP address.
+dot_count  -  Number of . characters in the URL.
+https_flag	-    Binary flag (1/0): whether the URL uses HTTPS.
+url_entropy	-    Shannon entropy of the URL string – higher values indicate more randomness.
+token_count	-    Number of tokens/words in the URL.
+subdomain_count	-    Number of subdomains in the URL.
+query_param_count  -	Number of query parameters (after ?).
+tld_length  -	Length of the Top-Level Domain (e.g., "com" = 3).
+path_length -	Length of the path part after the domain.
+has_hyphen_in_domain	Binary flag (1/0):    whether the domain contains a hyphen (-).
+number_of_digits -	Total number of numeric characters in the URL.
+tld_popularity	Binary flag (1/0): whether the TLD is popular.
+suspicious_file_extension	Binary flag (1/0): indicates if the URL ends with suspicious extensions (e.g., .exe, .zip).
+domain_name_length	-    Length of the domain name.
+percentage_numeric_chars	-  Percentage of numeric characters in the URL.
+ClassLabel	Target label: 1 = Legitimate, 0 = Phishing.
 """
 from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 import ipaddress
 from collections import Counter
 import re

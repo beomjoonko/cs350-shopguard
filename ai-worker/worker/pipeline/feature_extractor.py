@@ -12,8 +12,6 @@ downstream classifier) consumes. Each feature defaults to a neutral value
 when the input is empty so the pipeline never crashes on a missing crawl.
 """
 from collections import Counter
-from statistics import mean, pstdev
-
 from worker.crawler.base import CrawlResult
 
 
