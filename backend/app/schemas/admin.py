@@ -1,5 +1,5 @@
 """Pydantic schemas for admin operations — SRS §4.4."""
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class BlockUserRequest(BaseModel):

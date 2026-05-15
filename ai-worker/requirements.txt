@@ -14,13 +14,12 @@ beautifulsoup4==4.12.3
 lxml==5.3.0
 # playwright==1.48.0   # uncomment when TBD-2 (anti-bot bypass) is decided
 
-# ─── NLP (TBD-3) ────────────────────────────────────────────
-# Choose one of the following stacks once TBD-3 is resolved:
-#   transformers + torch  → BERT/DeBERTa style classifier
-#   sentence-transformers → embedding-based similarity
-#   scikit-learn          → lighter classical baseline
+# ─── NLP / URL classifier ───────────────────────────────────
+# URL-based fraud signal: ONNX MLP trained in Colab on LegitPhish dataset.
+# See worker/pipeline/url_classifier.py and url_model_artifacts/.
 scikit-learn==1.5.2
 numpy==2.1.2
+onnxruntime==1.20.1
 
 # ─── Dev / testing ──────────────────────────────────────────
 pytest==8.3.3

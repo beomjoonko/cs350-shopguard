@@ -66,7 +66,7 @@ shopguard/
 ### Run everything
 
 ```bash
-cp .env.example .env
+cp .env.example .env # copy .env.example .env
 make up            # docker compose up --build
 ```
 

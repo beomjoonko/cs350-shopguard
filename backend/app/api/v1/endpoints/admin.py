@@ -5,8 +5,6 @@ Admin endpoints — SRS §4.4.
   PATCH /admin/reports/{report_id}       set status (REQ-3)
   POST  /admin/users/{user_id}/block     suspend user + revoke sessions (REQ-4..6)
 """
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
