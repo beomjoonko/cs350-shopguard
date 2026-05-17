@@ -1,21 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getToken, clearToken } from "@/lib/auth";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { clearToken, getRoleSnapshot, notifyAuthChange } from "@/lib/auth";
+import { useLoggedIn } from "@/hooks/useLoggedIn";
 
 export default function Header() {
   const router = useRouter();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const pathname = usePathname();
+  const loggedIn = useLoggedIn();
+  const isAdmin = getRoleSnapshot() === "ADMIN";
 
+  // Re-read token after navigation (fixes stale Sign In/My Page toggle).
   useEffect(() => {
-    setLoggedIn(!!getToken());
-  }, []);
+    notifyAuthChange();
+  }, [pathname]);
 
   function logout() {
     clearToken();
-    setLoggedIn(false);
     router.push("/");
   }
 
@@ -30,21 +33,30 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-1 text-sm font-medium">
-          <Link
-            href="/report"
-            className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          >
-            Report
-          </Link>
           {loggedIn ? (
             <>
               <Link
-                href="/my-page"
+                href="/report"
                 className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              >
+                Report
+              </Link>
+              <Link
+                href="/my-page"
+                className="ml-1 rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
               >
                 My Page
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                >
+                  Admin
+                </Link>
+              )}
               <button
+                type="button"
                 onClick={logout}
                 className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               >
@@ -54,7 +66,7 @@ export default function Header() {
           ) : (
             <Link
               href="/login"
-              className="ml-1 rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
             >
               Sign In
             </Link>

@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { setToken } from "@/lib/auth";
 
-export default function LoginPage() {
+function safeNext(next: string | null): string {
+  if (!next) return "/my-page";
+  const t = next.trim();
+  if (!t.startsWith("/") || t.startsWith("//")) return "/my-page";
+  return t;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +28,7 @@ export default function LoginPage() {
     try {
       const res = await api.login(email, password);
       setToken(res.access_token);
-      router.push("/my-page");
+      router.push(safeNext(searchParams.get("next")));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -88,5 +96,13 @@ export default function LoginPage() {
         </p>
       </div>
     </section>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto mt-8 h-64 max-w-sm animate-pulse rounded-2xl bg-slate-200" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

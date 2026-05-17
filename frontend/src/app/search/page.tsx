@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useLoggedIn } from "@/hooks/useLoggedIn";
 import type { RiskLevel, UrlAnalysisResult } from "@/types";
 
 type RiskMeta = {
@@ -67,6 +68,7 @@ function Skeleton() {
 function SearchResults() {
   const params = useSearchParams();
   const router = useRouter();
+  const loggedIn = useLoggedIn();
   const url = params.get("url") ?? "";
 
   const [result, setResult] = useState<UrlAnalysisResult | null>(null);
@@ -247,17 +249,22 @@ function SearchResults() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          <button
-            onClick={() => router.push(`/report?url=${encodeURIComponent(result.url)}`)}
-            className="flex items-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Report Fraud
-          </button>
+          {loggedIn && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/report?url=${encodeURIComponent(result.url)}`)
+              }
+              className="flex items-center gap-2 rounded-xl border border-red-300 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              Report Fraud
+            </button>
+          )}
           <button
             onClick={() => {
               setResult(null);
