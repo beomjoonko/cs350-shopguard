@@ -5,6 +5,7 @@ One row per *normalized* URL. URL normalization (SRS §4.5 REQ-2) prevents
 duplicate analysis of equivalent links.
 """
 import enum
+import hashlib
 import uuid
 from datetime import datetime
 
@@ -26,9 +27,14 @@ class Url(Base):
     __tablename__ = "urls"
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    # Keep this indexable under MySQL utf8mb4 index-size limits.
-    normalized_url = Column(String(768), unique=True, nullable=False, index=True)
+    normalized_url = Column(String(2048), nullable=False)
+    # MySQL/RDS may reject indexing very long utf8mb4 strings; keep uniqueness on a fixed-size hash.
+    normalized_url_hash = Column(String(64), unique=True, nullable=False, index=True)
     current_risk_score = Column(Integer, nullable=True)  # 0–100, SRS §4.7 REQ-3
     current_risk_level = Column(Enum(RiskLevel), nullable=True)
     last_analyzed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    @staticmethod
+    def compute_hash(normalized_url: str) -> str:
+        return hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()

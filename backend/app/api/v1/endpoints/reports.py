@@ -30,10 +30,11 @@ def create_report(
         raise HTTPException(status_code=400, detail="Legal consent is required")
 
     normalized = normalize_url(str(payload.url))
+    normalized_hash = Url.compute_hash(normalized)
 
-    url_row = db.query(Url).filter(Url.normalized_url == normalized).first()
+    url_row = db.query(Url).filter(Url.normalized_url_hash == normalized_hash).first()
     if url_row is None:
-        url_row = Url(normalized_url=normalized)
+        url_row = Url(normalized_url=normalized, normalized_url_hash=normalized_hash)
         db.add(url_row)
         db.flush()
 
