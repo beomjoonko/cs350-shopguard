@@ -35,8 +35,9 @@ def search_url(
 ):
     """SRS §4.5 REQ-1..6."""
     normalized = normalize_url(str(payload.url))
+    normalized_hash = Url.compute_hash(normalized)
 
-    url_row = db.query(Url).filter(Url.normalized_url == normalized).first()
+    url_row = db.query(Url).filter(Url.normalized_url_hash == normalized_hash).first()
 
     # REQ-3 + REQ-4: cached path
     if url_row and url_row.current_risk_score is not None:
@@ -59,7 +60,7 @@ def search_url(
 
     # New URL — create row + enqueue async job (REQ-5, REQ-6)
     if url_row is None:
-        url_row = Url(normalized_url=normalized)
+        url_row = Url(normalized_url=normalized, normalized_url_hash=normalized_hash)
         db.add(url_row)
         db.flush()
 
