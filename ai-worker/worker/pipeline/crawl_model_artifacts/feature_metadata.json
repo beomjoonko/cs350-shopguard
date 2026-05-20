@@ -1,0 +1,77 @@
+{
+  "input_dim": 3796,
+  "branch_widths": {
+    "text": {
+      "offset": 0,
+      "width": 3000
+    },
+    "html": {
+      "offset": 3000,
+      "width": 500
+    },
+    "css": {
+      "offset": 3500,
+      "width": 200
+    },
+    "num": {
+      "offset": 3700,
+      "width": 7
+    },
+    "cat": {
+      "offset": 3707,
+      "width": 89
+    }
+  },
+  "columns_required": [
+    "text_tokens",
+    "html_tokens",
+    "css_tokens",
+    "assets_downloaded",
+    "domain_age_days",
+    "cert_validity_days",
+    "cert_remaining_at_scan",
+    "cert_age_at_scan",
+    "domain_age_to_expiry",
+    "has_tls",
+    "language",
+    "protocol",
+    "security_state",
+    "security_protocol",
+    "security_issuer",
+    "remote_ip_country"
+  ],
+  "numeric_cols": [
+    "assets_downloaded",
+    "domain_age_days",
+    "cert_validity_days",
+    "cert_remaining_at_scan",
+    "cert_age_at_scan",
+    "domain_age_to_expiry",
+    "has_tls"
+  ],
+  "categorical_cols": [
+    "language",
+    "protocol",
+    "security_state",
+    "security_protocol",
+    "security_issuer",
+    "remote_ip_country"
+  ],
+  "text_col": "text_tokens",
+  "html_col": "html_tokens",
+  "css_col": "css_tokens",
+  "preprocessing_notes": {
+    "html_tokens": "JSON list of tag names -> space-delimited lowercase string (html_to_tokens)",
+    "css_tokens": "JSON dict {prop: [vals]} -> space-delimited lowercase property names with spaces->underscore (css_to_tokens)",
+    "text_tokens": "features_text as-is (fillna empty string)",
+    "categorical_missing": "fill NaN with literal \"__missing__\" before transform",
+    "derived_numeric": {
+      "cert_validity_days": "days(security_valid_to - security_valid_from)",
+      "cert_remaining_at_scan": "days(security_valid_to - scan_date)",
+      "cert_age_at_scan": "days(scan_date - security_valid_from)",
+      "domain_age_days": "whois_domain_age (numeric coerce)",
+      "domain_age_to_expiry": "days(whois_registry_expired_at - scan_date)",
+      "has_tls": "1 if security_protocol not null else 0"
+    }
+  }
+}
