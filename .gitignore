@@ -50,3 +50,6 @@ redis_data/
 # Build artifacts
 dist/
 build/
+
+# Large dataset files (>100MB, not tracked in git)
+ai-worker/datasets/*.csv
