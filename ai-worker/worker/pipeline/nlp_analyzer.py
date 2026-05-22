@@ -1,45 +1,39 @@
 """
 NLP analyzer — SRS §4.6 REQ-5.
 
-Computes an "AI score" in [0, 100] for a URL by combining:
-  1. URL classifier (always available) — worker.pipeline.url_classifier
-  2. Content-based features (when crawler returned product/reviews)
+Combines two fraud signals into a single AI score in [0, 100]:
 
-When content is unavailable (TBD-2 crawlers are still stubs), the URL
-classifier becomes the sole signal. Once real crawlers ship, the URL
-score acts as a supplementary signal blended with the content score.
+  - url_classifier:   raw URL string only           (LegitPhish-trained MLP)
+  - crawl_classifier: page content + WHOIS/TLS/IP   (phishpedia-trained MLP)
+
+Both emit `(1 - P_legit) * 100`, so they share direction and can be blended
+linearly. The crawl signal carries more information when available, so the
+default weighting leans on it; but because the crawl model was trained on
+brand-impersonation phishing (Microsoft/UPS/DHL) and ShopGuard targets
+e-commerce, the weight is deliberately not extreme.
+
+Fallback: when the crawler failed to fetch the page (fetch_ok=False), the
+crawl signal is dropped and the URL score becomes the sole input — feeding
+empty content into the classifier would produce an unreliable score.
 """
 from __future__ import annotations
 
+from worker.crawler.snapshot import CrawlSnapshot
+from worker.pipeline.crawl_classifier import compute_crawl_risk_score
 from worker.pipeline.url_classifier import compute_url_risk_score
 
 
-# Content-feature weights — same shape as the original placeholder formula.
-_CONTENT_WEIGHTS = {
-    "review_repetition_rate": 40.0,
-    "rating_skew": 30.0,
-    "price_anomaly": 20.0,
-    "image_similarity": 10.0,
-}
-
-# Blend ratio when content is available.
-_CONTENT_BLEND_WEIGHT = 0.7
-_URL_BLEND_WEIGHT = 0.3
+_CRAWL_WEIGHT = 0.6
+_URL_WEIGHT = 0.4
 
 
-def _content_score(features: dict) -> float:
-    score = 0.0
-    for k, w in _CONTENT_WEIGHTS.items():
-        score += float(features.get(k, 0.0)) * w
+def _clamp(score: float) -> float:
     return max(0.0, min(100.0, score))
 
 
-def compute_ai_score(features: dict, url: str) -> float:
-    """Return an AI score in [0, 100]."""
+def compute_ai_score(url: str, snapshot: CrawlSnapshot | None = None) -> float:
     url_score = compute_url_risk_score(url)
-
-    if not features.get("has_product"):
-        return url_score
-
-    blended = _CONTENT_BLEND_WEIGHT * _content_score(features) + _URL_BLEND_WEIGHT * url_score
-    return max(0.0, min(100.0, blended))
+    if snapshot is None or not snapshot.fetch_ok:
+        return _clamp(url_score)
+    crawl_score = compute_crawl_risk_score(snapshot)
+    return _clamp(_CRAWL_WEIGHT * crawl_score + _URL_WEIGHT * url_score)
