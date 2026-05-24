@@ -3,12 +3,10 @@ AI Worker entry point — SRS §4.6 AI Analysis Pipeline.
 
 Runs a blocking BLPOP loop on the Redis analysis queue. For each job:
 
-  1. Crawl the URL (worker/crawler)
-  2. Preprocess (worker/pipeline/preprocessor)
-  3. Extract features (worker/pipeline/feature_extractor)
-  4. NLP analysis (worker/pipeline/nlp_analyzer)
-  5. Compute final risk score (worker/scoring/risk_scorer)
-  6. Persist results to MySQL + cache in Redis
+  1. Crawl the URL (worker/crawler) → CrawlSnapshot
+  2. NLP analysis (worker/pipeline/nlp_analyzer)
+  3. Compute final risk score (worker/scoring/risk_scorer)
+  4. Persist results to MySQL + cache in Redis
 
 In production this should be replaced or wrapped with Celery / RQ / Dramatiq
 once the team picks an orchestrator. For the skeleton we keep it minimal so
@@ -26,9 +24,7 @@ from sqlalchemy.orm import Session
 
 from worker.config import settings
 from worker.database import SessionLocal
-from worker.crawler import dispatch_crawler
-from worker.pipeline.preprocessor import preprocess
-from worker.pipeline.feature_extractor import extract_features
+from worker.crawler import crawl
 from worker.pipeline.nlp_analyzer import compute_ai_score
 from worker.scoring.risk_scorer import compute_final_risk_score, score_to_level
 
@@ -83,12 +79,10 @@ def process_job(job: dict, db: Session, r: redis.Redis) -> None:
 
     try:
         _set_job_status(db, job_id, "CRAWLING")
-        raw = dispatch_crawler(url)
+        snapshot = crawl(url)
 
         _set_job_status(db, job_id, "ANALYZING")
-        cleaned = preprocess(raw)
-        features = extract_features(cleaned)
-        ai_score = compute_ai_score(features, url)
+        ai_score = compute_ai_score(url, snapshot)
 
         report_count = _count_active_reports(db, url_id)
         final_score = compute_final_risk_score(

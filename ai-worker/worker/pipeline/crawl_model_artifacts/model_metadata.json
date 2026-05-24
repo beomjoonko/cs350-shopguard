@@ -1,0 +1,23 @@
+{
+  "trained_at": "2026-05-20T13:30:36.196546",
+  "framework": "PyTorch 2.10.0+cpu",
+  "model_arch": "MLP (3796 -> 256 -> 64 -> 1)",
+  "training_dataset": "merged_v1.parquet (phishpedia rows only)",
+  "label_convention": {
+    "0": "phishing",
+    "1": "legitimate"
+  },
+  "n_train": 7275,
+  "n_val": 1560,
+  "n_test": 1560,
+  "threshold": 0.5,
+  "suggested_f1_threshold": 0.3616345524787903,
+  "metrics": {
+    "accuracy": 0.9846153846153847,
+    "precision": 0.9872286079182631,
+    "recall": 0.9822109275730623,
+    "f1": 0.9847133757961783,
+    "roc_auc": 0.9992520765150381,
+    "pr_auc": 0.9992668766847457
+  }
+}
