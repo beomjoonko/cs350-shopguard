@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ReportDetailModal } from "@/components/reports/ReportDetailModal";
 import { api } from "@/lib/api";
+import { FRAUD_LABEL, statusBadge } from "@/lib/reportLabels";
 import type { Report, ReportStatus, User } from "@/types";
 
 type Tab = "reports" | "account";
@@ -13,32 +15,13 @@ const STATUS_FILTERS: { label: string; value: ReportStatus | "ALL" }[] = [
   { label: "Hidden",   value: "HIDDEN" },
 ];
 
-const STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  PENDING:        { label: "Pending",      bg: "bg-amber-100",  text: "text-amber-800" },
-  SUBMITTED:      { label: "Submitted",    bg: "bg-blue-100",   text: "text-blue-800" },
-  ACTIVE:         { label: "Approved",     bg: "bg-green-100",  text: "text-green-800" },
-  UNDER_REVIEW:   { label: "Under Review", bg: "bg-purple-100", text: "text-purple-800" },
-  VERIFIED:       { label: "Verified",     bg: "bg-green-100",  text: "text-green-800" },
-  BLINDED_DELETED:{ label: "Removed",      bg: "bg-slate-100",  text: "text-slate-600" },
-  HIDDEN:         { label: "Hidden",       bg: "bg-slate-100",  text: "text-slate-600" },
-  DRAFT:          { label: "Draft",        bg: "bg-slate-100",  text: "text-slate-500" },
-};
-
-const FRAUD_LABEL: Record<string, string> = {
-  NON_DELIVERY:          "Non-delivery of Goods",
-  FALSE_ADVERTISING:     "False Advertising",
-  REFUSAL_OF_REFUND:     "Refusal of Refund",
-  DEFECTIVE_PRODUCTS:    "Defective Products",
-  PERSONAL_DATA_LEAKAGE: "Personal Data Leakage",
-  OTHERS:                "Others",
-};
-
 export default function MyPage() {
   const [tab, setTab] = useState<Tab>("reports");
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
 
   const [user, setUser] = useState<User | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // password change state
@@ -171,9 +154,21 @@ export default function MyPage() {
           ) : (
             <ul className="space-y-3">
               {filteredReports.map((r) => {
-                const badge = STATUS_BADGE[r.status] ?? STATUS_BADGE.DRAFT;
+                const badge = statusBadge(r.status);
                 return (
-                  <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <li
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedReport(r)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedReport(r);
+                      }
+                    }}
+                    className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+                  >
                     <div className="flex items-center justify-between">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.bg} ${badge.text}`}>
                         {badge.label}
@@ -187,12 +182,23 @@ export default function MyPage() {
                     <p className="mt-2 text-sm font-semibold text-slate-800">
                       Report Type: {FRAUD_LABEL[r.fraud_type] ?? r.fraud_type}
                     </p>
+                    {r.url && (
+                      <p className="mt-1 truncate text-xs text-blue-600">{r.url}</p>
+                    )}
+                    {r.risk_score != null && (
+                      <p className="mt-1 text-xs font-medium text-slate-600">
+                        Risk score: {r.risk_score}
+                        {r.risk_level ? ` (${r.risk_level})` : ""}
+                      </p>
+                    )}
                     <p className="mt-1 text-sm text-slate-600 line-clamp-2">{r.description}</p>
+                    <p className="mt-2 text-xs text-slate-400">Click for details</p>
                     {r.evidence_image_url && (
                       <a
                         href={r.evidence_image_url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:underline"
                       >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -206,6 +212,13 @@ export default function MyPage() {
                 );
               })}
             </ul>
+          )}
+
+          {selectedReport && (
+            <ReportDetailModal
+              report={selectedReport}
+              onClose={() => setSelectedReport(null)}
+            />
           )}
         </div>
       )}

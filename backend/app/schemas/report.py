@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.models.report import FraudType, ReportStatus
+from app.models.url import RiskLevel
 
 
 class ReportCreate(BaseModel):
@@ -16,12 +17,16 @@ class ReportCreate(BaseModel):
 
 class ReportPublic(BaseModel):
     id: str
+    user_id: str
     url_id: str
     fraud_type: FraudType
     description: str
     evidence_image_url: str | None
     status: ReportStatus
     created_at: datetime
+    url: str | None = None
+    risk_score: int | None = None
+    risk_level: RiskLevel | None = None
 
     class Config:
         from_attributes = True

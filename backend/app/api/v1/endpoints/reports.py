@@ -13,6 +13,7 @@ from app.models.report import Report, ReportStatus
 from app.models.url import Url
 from app.models.user import User, UserRole
 from app.schemas.report import ReportCreate, ReportPublic
+from app.utils.report_public import report_to_public
 from app.utils.url_normalizer import normalize_url
 
 router = APIRouter()
@@ -62,7 +63,7 @@ def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
-    return report
+    return report_to_public(report, url_row)
 
 
 @router.get("/{report_id}", response_model=ReportPublic)
@@ -77,4 +78,5 @@ def get_report(
         raise HTTPException(status_code=404, detail="Report not found")
     if report.user_id != current_user.id and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return report
+    url_row = db.query(Url).filter(Url.id == report.url_id).first()
+    return report_to_public(report, url_row)

@@ -3,8 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { addRecentSearch } from "@/lib/recentSearches";
 import { useLoggedIn } from "@/hooks/useLoggedIn";
 import type { RiskLevel, UrlAnalysisResult } from "@/types";
+
+const SEARCH_RETRY_DELAY_MS = 1500;
+const SEARCH_RETRY_LIMIT = 5;
+const POLL_RETRY_LIMIT = 10;
 
 type RiskMeta = {
   label: string;
@@ -20,6 +25,11 @@ const RISK_META: Record<RiskLevel, RiskMeta> = {
   DANGER:   { label: "Danger",   color: "#ef4444", light: "#fee2e2", textColor: "#991b1b", icon: "✕" },
   CRITICAL: { label: "Critical", color: "#7f1d1d", light: "#fca5a5", textColor: "#7f1d1d", icon: "!" },
 };
+
+function isTransientFetchError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Failed to fetch");
+}
 
 function WarningModal({ level, onClose }: { level: RiskLevel; onClose: () => void }) {
   const meta = RISK_META[level];
@@ -79,20 +89,46 @@ function SearchResults() {
 
   useEffect(() => {
     if (!url) return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
+    addRecentSearch(url);
     setError(null);
     setResult(null);
     setFinalScore(null);
     setFinalLevel(null);
     setShowModal(false);
-    api.searchUrl(url).then(setResult).catch((e) => setError(String(e)));
+
+    const startSearch = async () => {
+      try {
+        const response = await api.searchUrl(url);
+        if (!cancelled) setResult(response);
+      } catch (e) {
+        attempts += 1;
+        if (!cancelled && isTransientFetchError(e) && attempts < SEARCH_RETRY_LIMIT) {
+          retryTimer = setTimeout(startSearch, SEARCH_RETRY_DELAY_MS);
+          return;
+        }
+        if (!cancelled) setError(String(e));
+      }
+    };
+
+    void startSearch();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [url]);
 
   // poll job until completed
   useEffect(() => {
     if (!result?.job_id || result.cached) return;
+    let consecutiveFailures = 0;
     const id = setInterval(async () => {
       try {
         const job = await api.getJob(result.job_id!);
+        consecutiveFailures = 0;
         if (job.status === "COMPLETED") {
           const lvl = job.risk_level as RiskLevel | null;
           setFinalScore(job.final_risk_score);
@@ -104,6 +140,10 @@ function SearchResults() {
           clearInterval(id);
         }
       } catch (e) {
+        if (isTransientFetchError(e)) {
+          consecutiveFailures += 1;
+          if (consecutiveFailures < POLL_RETRY_LIMIT) return;
+        }
         setError(String(e));
         clearInterval(id);
       }
