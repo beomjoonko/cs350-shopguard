@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from datetime import datetime
 
 import redis
@@ -61,6 +62,63 @@ def _count_active_reports(db: Session, url_id: str) -> int:
     return int(row or 0)
 
 
+def _persist_snapshot(db: Session, job_id: str, url_id: str, snapshot) -> None:
+    """Store the raw CrawlSnapshot in crawl_snapshots (own commit, so the crawl
+    record survives even if downstream scoring fails)."""
+    db.execute(
+        text("""
+            INSERT INTO crawl_snapshots (
+                id, analysis_job_id, url_id, scan_date,
+                protocol, fetch_status, fetch_ok,
+                features_text, features_html, features_css,
+                language, assets_downloaded,
+                security_state, security_protocol, security_issuer,
+                security_valid_from, security_valid_to,
+                whois_domain_age, whois_registry_expired_at, whois_registrar,
+                remote_ip_country, remote_ip_asn, remote_ip_isp,
+                created_at
+            ) VALUES (
+                :id, :job_id, :url_id, :scan_date,
+                :protocol, :fetch_status, :fetch_ok,
+                :features_text, :features_html, :features_css,
+                :language, :assets_downloaded,
+                :security_state, :security_protocol, :security_issuer,
+                :security_valid_from, :security_valid_to,
+                :whois_domain_age, :whois_registry_expired_at, :whois_registrar,
+                :remote_ip_country, :remote_ip_asn, :remote_ip_isp,
+                :created_at
+            )
+        """),
+        {
+            "id": str(uuid.uuid4()),
+            "job_id": job_id,
+            "url_id": url_id,
+            "scan_date": snapshot.scan_date,
+            "protocol": snapshot.protocol,
+            "fetch_status": snapshot.fetch_status,
+            "fetch_ok": snapshot.fetch_ok,
+            "features_text": snapshot.features_text,
+            "features_html": json.dumps(snapshot.features_html),
+            "features_css": json.dumps(snapshot.features_css),
+            "language": snapshot.language,
+            "assets_downloaded": snapshot.assets_downloaded,
+            "security_state": snapshot.security_state,
+            "security_protocol": snapshot.security_protocol,
+            "security_issuer": snapshot.security_issuer,
+            "security_valid_from": snapshot.security_valid_from,
+            "security_valid_to": snapshot.security_valid_to,
+            "whois_domain_age": snapshot.whois_domain_age,
+            "whois_registry_expired_at": snapshot.whois_registry_expired_at,
+            "whois_registrar": snapshot.whois_registrar,
+            "remote_ip_country": snapshot.remote_ip_country,
+            "remote_ip_asn": snapshot.remote_ip_asn,
+            "remote_ip_isp": snapshot.remote_ip_isp,
+            "created_at": datetime.utcnow(),
+        },
+    )
+    db.commit()
+
+
 def process_job(job: dict, db: Session, r: redis.Redis) -> None:
     job_id = job["job_id"]
     url = job["url"]
@@ -80,6 +138,7 @@ def process_job(job: dict, db: Session, r: redis.Redis) -> None:
     try:
         _set_job_status(db, job_id, "CRAWLING")
         snapshot = crawl(url)
+        _persist_snapshot(db, job_id, url_id, snapshot)
 
         _set_job_status(db, job_id, "ANALYZING")
         ai_score = compute_ai_score(url, snapshot)

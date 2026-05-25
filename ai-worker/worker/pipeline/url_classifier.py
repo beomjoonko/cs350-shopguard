@@ -192,7 +192,7 @@ def _url_entropy(url: str) -> float:
 
 
 def _token_count(url: str) -> int:
-    delimiters = r"\.|\/|\?|\="
+    delimiters = r"\.|\/|\?|\=|\&"
     return len(re.split(delimiters, url))
 
 
@@ -203,13 +203,14 @@ def _subdomain_count(url: str) -> int:
     domain = parsed_result.netloc
     # parts = ['www', 'example', 'com:8080']
     parts = domain.split('.')
-    # 'www' -> return 1
-    return max(0, len(parts)-2)
+    # Empty netloc (scheme-less URL) -> [''] -> 1 - 2 == -1 (kept to match dataset).
+    return len(parts) - 2
 
 
 def _query_param_count(url: str) -> int:
-    # query_param_count with Feature Extraction Anomalies
-    return len(url.split('?'))
+    # query_param_count with Feature Extraction Anomalies:
+    # split the query string on '&'; empty query -> [''] -> 1.
+    return len(urlparse(url).query.split('&'))
 
 
 def _tld_length(url: str) -> int:
@@ -229,14 +230,17 @@ def _number_of_digits(url: str) -> int:
 
 
 def _tld_popularity(url: str) -> int:
+    # Uses the port-inclusive TLD (e.g. "com:8080" is NOT popular), matching dataset.
     POPULAR_TLDS = {"com", "org", "net", "edu", "gov"}
-    return int(_get_tld_true(url) in POPULAR_TLDS)
+    return int(_get_tld(url).lower() in POPULAR_TLDS)
 
 
 def _suspicious_file_extension(url: str) -> int:
-    SUSPICIOUS_EXTS = {".exe", ".bin", ".zip", ".scr", ".bat", ".rar", ".js", ".vbs", ".msi", ".dll"}
-    ext = "." + url.rsplit(".", 1)[-1].lower()
-    return int(ext in SUSPICIOUS_EXTS)
+    # Match the extension at the END of the URL path only, against the dataset's set.
+    SUSPICIOUS_EXTS = {"exe", "zip", "bin", "apk", "cmd", "js"}
+    path = urlparse(url).path
+    m = re.search(r"\.([A-Za-z0-9]+)$", path)
+    return int(bool(m and m.group(1).lower() in SUSPICIOUS_EXTS))
 
 def _domain_name_length(url: str) -> int:
     parsed_result = urlparse(url)
