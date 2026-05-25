@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_admin
+from app.core.redis import enqueue_analysis_job
 from app.models.admin_audit_log import AdminAuditLog
+from app.models.analysis_job import AnalysisJob, JobStatus
 from app.models.blacklist import Blacklist
-from app.models.report import Report
+from app.models.report import Report, ReportStatus
 from app.models.url import Url
 from app.models.user import User, UserStatus
 from app.schemas.admin import BlockUserRequest
@@ -20,6 +22,41 @@ from app.schemas.report import ReportPublic, ReportStatusUpdate
 from app.utils.report_public import report_to_public
 
 router = APIRouter()
+
+_RISK_COUNTED_STATUSES = {ReportStatus.ACTIVE, ReportStatus.VERIFIED}
+
+
+def _status_counts_toward_risk(status: ReportStatus) -> bool:
+    return status in _RISK_COUNTED_STATUSES
+
+
+def _enqueue_reanalysis_if_needed(
+    db: Session,
+    url_row: Url | None,
+    old_status: ReportStatus,
+    new_status: ReportStatus,
+) -> None:
+    if url_row is None:
+        return
+    if _status_counts_toward_risk(old_status) == _status_counts_toward_risk(new_status):
+        return
+
+    existing_job = (
+        db.query(AnalysisJob)
+        .filter(
+            AnalysisJob.url_id == url_row.id,
+            AnalysisJob.status.in_([JobStatus.PENDING, JobStatus.CRAWLING, JobStatus.ANALYZING]),
+        )
+        .first()
+    )
+    if existing_job:
+        return
+
+    job = AnalysisJob(url_id=url_row.id, status=JobStatus.PENDING)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    enqueue_analysis_job(job_id=job.id, url=url_row.normalized_url)
 
 
 @router.get("/reports", response_model=list[ReportPublic])
@@ -58,9 +95,10 @@ def update_report_status(
         action_type="UPDATE_REPORT_STATUS",
         reason=f"{old_status.value} -> {payload.status.value}",
     ))
+    url_row = db.query(Url).filter(Url.id == report.url_id).first()
     db.commit()
     db.refresh(report)
-    url_row = db.query(Url).filter(Url.id == report.url_id).first()
+    _enqueue_reanalysis_if_needed(db, url_row, old_status, report.status)
     return report_to_public(report, url_row)
 
 
