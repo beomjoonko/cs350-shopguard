@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { addRecentSearch } from "@/lib/recentSearches";
 import { useLoggedIn } from "@/hooks/useLoggedIn";
 import type { RiskLevel, UrlAnalysisResult } from "@/types";
 
@@ -79,6 +80,7 @@ function SearchResults() {
 
   useEffect(() => {
     if (!url) return;
+    addRecentSearch(url);
     setError(null);
     setResult(null);
     setFinalScore(null);

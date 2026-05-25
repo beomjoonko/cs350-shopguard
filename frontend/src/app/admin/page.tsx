@@ -1,28 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ReportDetailModal } from "@/components/reports/ReportDetailModal";
 import { api } from "@/lib/api";
+import { FRAUD_LABEL, statusBadge } from "@/lib/reportLabels";
 import type { Report, ReportStatus } from "@/types";
 
 const ALL_STATUSES: ReportStatus[] = ["ACTIVE", "PENDING", "HIDDEN", "UNDER_REVIEW", "VERIFIED", "BLINDED_DELETED"];
-
-const STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  PENDING:        { label: "Pending",      bg: "bg-amber-100",  text: "text-amber-800" },
-  ACTIVE:         { label: "Approved",     bg: "bg-green-100",  text: "text-green-800" },
-  UNDER_REVIEW:   { label: "Under Review", bg: "bg-purple-100", text: "text-purple-800" },
-  VERIFIED:       { label: "Verified",     bg: "bg-green-100",  text: "text-green-800" },
-  BLINDED_DELETED:{ label: "Removed",      bg: "bg-slate-100",  text: "text-slate-600" },
-  HIDDEN:         { label: "Hidden",       bg: "bg-slate-100",  text: "text-slate-600" },
-};
-
-const FRAUD_LABEL: Record<string, string> = {
-  NON_DELIVERY:          "Non-delivery",
-  FALSE_ADVERTISING:     "False Advertising",
-  REFUSAL_OF_REFUND:     "Refund Denial",
-  DEFECTIVE_PRODUCTS:    "Defective Products",
-  PERSONAL_DATA_LEAKAGE: "Data Leakage",
-  OTHERS:                "Others",
-};
 
 function StatCard({
   label,
@@ -46,6 +30,7 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
   const [blockingId, setBlockingId] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   useEffect(() => {
     api.adminListReports().then(setReports).catch((e) => setError(String(e)));
@@ -55,6 +40,7 @@ export default function AdminPage() {
     try {
       const updated = await api.adminUpdateReportStatus(id, status);
       setReports((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      setSelectedReport((prev) => (prev?.id === id ? updated : prev));
     } catch (e) {
       setError(String(e));
     }
@@ -102,7 +88,7 @@ export default function AdminPage() {
             >
               <option value="ALL">All</option>
               {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_BADGE[s]?.label ?? s}</option>
+                <option key={s} value={s}>{statusBadge(s).label}</option>
               ))}
             </select>
           </div>
@@ -128,9 +114,13 @@ export default function AdminPage() {
                 </tr>
               )}
               {filtered.map((r) => {
-                const badge = STATUS_BADGE[r.status] ?? { label: r.status, bg: "bg-slate-100", text: "text-slate-600" };
+                const badge = statusBadge(r.status);
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50">
+                  <tr
+                    key={r.id}
+                    className="cursor-pointer hover:bg-slate-50"
+                    onClick={() => setSelectedReport(r)}
+                  >
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">
                       {r.id.slice(0, 8)}…
                     </td>
@@ -146,8 +136,11 @@ export default function AdminPage() {
                       {new Date(r.created_at).toLocaleDateString("en-US", {
                         year: "numeric", month: "short", day: "numeric",
                       })}
+                      {r.risk_score != null && (
+                        <span className="ml-2 text-xs text-slate-400">· {r.risk_score}</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         {/* Approve */}
                         <button
@@ -188,12 +181,17 @@ export default function AdminPage() {
                         {/* Block user — opens dropdown */}
                         <select
                           value=""
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             if (e.target.value === "block") {
                               const reason = window.prompt("Reason for blocking this user:");
                               if (reason) {
-                                api.adminBlockUser(r.url_id, reason).catch(() => {});
-                                setBlockingId(r.id);
+                                try {
+                                  await api.adminBlockUser(r.user_id, reason);
+                                  setBlockingId(r.id);
+                                  setError(null);
+                                } catch (err) {
+                                  setError(String(err));
+                                }
                               }
                             }
                             e.target.value = "";
@@ -215,6 +213,14 @@ export default function AdminPage() {
 
       {blockingId && (
         <p className="text-sm text-green-700">User block action submitted for report {blockingId.slice(0, 8)}.</p>
+      )}
+
+      {selectedReport && (
+        <ReportDetailModal
+          report={selectedReport}
+          showReporterId
+          onClose={() => setSelectedReport(null)}
+        />
       )}
     </section>
   );

@@ -13,9 +13,11 @@ from app.core.dependencies import require_admin
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.blacklist import Blacklist
 from app.models.report import Report
+from app.models.url import Url
 from app.models.user import User, UserStatus
 from app.schemas.admin import BlockUserRequest
 from app.schemas.report import ReportPublic, ReportStatusUpdate
+from app.utils.report_public import report_to_public
 
 router = APIRouter()
 
@@ -26,7 +28,13 @@ def list_reports(
     _: User = Depends(require_admin),
 ):
     """SRS §4.4 REQ-2 — admins see all reports."""
-    return db.query(Report).order_by(Report.created_at.desc()).all()
+    rows = (
+        db.query(Report, Url)
+        .join(Url, Report.url_id == Url.id)
+        .order_by(Report.created_at.desc())
+        .all()
+    )
+    return [report_to_public(report, url_row) for report, url_row in rows]
 
 
 @router.patch("/reports/{report_id}", response_model=ReportPublic)
@@ -52,7 +60,8 @@ def update_report_status(
     ))
     db.commit()
     db.refresh(report)
-    return report
+    url_row = db.query(Url).filter(Url.id == report.url_id).first()
+    return report_to_public(report, url_row)
 
 
 @router.post("/users/{user_id}/block", status_code=204)

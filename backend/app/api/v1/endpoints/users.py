@@ -12,8 +12,10 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.security import hash_password, verify_password
 from app.models.report import Report
+from app.models.url import Url
 from app.models.user import User
 from app.schemas.report import ReportPublic
+from app.utils.report_public import report_to_public
 from app.schemas.user import PasswordChange, UserPublic
 
 router = APIRouter()
@@ -30,12 +32,14 @@ def my_reports(
     db: Session = Depends(get_db),
 ):
     """SRS §4.3 REQ-1, REQ-4 (access control: own reports only)."""
-    return (
-        db.query(Report)
+    rows = (
+        db.query(Report, Url)
+        .join(Url, Report.url_id == Url.id)
         .filter(Report.user_id == current_user.id)
         .order_by(Report.created_at.desc())
         .all()
     )
+    return [report_to_public(report, url_row) for report, url_row in rows]
 
 
 @router.post("/me/password", status_code=204)

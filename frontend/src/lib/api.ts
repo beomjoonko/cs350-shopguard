@@ -1,5 +1,5 @@
 import { getToken, clearToken } from "./auth";
-import type { Report, UrlAnalysisResult, User, FraudType } from "@/types";
+import type { Report, UrlAnalysisResult, User, FraudType, PlatformStats } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
@@ -68,4 +68,6 @@ export const api = {
     request<Report>(`/admin/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   adminBlockUser: (userId: string, reason: string) =>
     request<void>(`/admin/users/${userId}/block`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  getStats: () => request<PlatformStats>("/stats"),
 };

@@ -24,12 +24,16 @@ export interface User {
 
 export interface Report {
   id: string;
+  user_id: string;
   url_id: string;
   fraud_type: FraudType;
   description: string;
   evidence_image_url: string | null;
   status: ReportStatus;
   created_at: string;
+  url?: string | null;
+  risk_score?: number | null;
+  risk_level?: RiskLevel | null;
 }
 
 export interface UrlAnalysisResult {
@@ -40,4 +44,10 @@ export interface UrlAnalysisResult {
   last_analyzed_at: string | null;
   job_id: string | null;
   cached: boolean;
+}
+
+export interface PlatformStats {
+  shops_analyzed: number;
+  scam_sites_blocked: number;
+  users_protected: number;
 }
