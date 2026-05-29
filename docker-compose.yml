@@ -1,17 +1,4 @@
 services:
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -20,25 +7,9 @@ services:
     env_file: .env
     ports:
       - "8000:8000"
-    depends_on:
-      redis:
-        condition: service_healthy
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  ai-worker:
-    build:
-      context: ./ai-worker
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./ai-worker:/app
-    command: python -m worker.main
 
   frontend:
     build:
@@ -55,6 +26,3 @@ services:
       - /app/node_modules
       - /app/.next
     command: npm run dev
-
-volumes:
-  redis_data:

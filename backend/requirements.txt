@@ -10,8 +10,6 @@ sqlalchemy==2.0.36
 alembic==1.13.3
 psycopg2-binary==2.9.9
 
-# ─── Cache / Queue ──────────────────────────────────────────
-redis==5.1.1
 
 # ─── Security (SRS §5.3) ────────────────────────────────────
 python-jose[cryptography]==3.3.0
@@ -20,8 +18,6 @@ python-multipart==0.0.12
 # ─── Supabase (Auth admin API + Storage) ────────────────────
 supabase==2.10.0
 
-# ─── Rate limiting (SRS §4.8) ───────────────────────────────
-slowapi==0.1.9
 
 # ─── Email / notifications ──────────────────────────────────
 aiosmtplib==3.0.2

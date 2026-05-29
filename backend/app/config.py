@@ -24,10 +24,6 @@ class Settings(BaseSettings):
     # ─── Database (Supabase PostgreSQL) ─────────────────────
     DATABASE_URL: str = "postgresql+psycopg2://postgres:changeme@db.xxx.supabase.co:5432/postgres"
 
-    # ─── Redis ──────────────────────────────────────────────
-    REDIS_HOST: str = "redis"
-    REDIS_PORT: int = 6379
-
     # ─── Supabase ───────────────────────────────────────────
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
