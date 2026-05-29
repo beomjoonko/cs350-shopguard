@@ -7,10 +7,9 @@ duplicate analysis of equivalent links.
 import enum
 import hashlib
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, Integer, String
-from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy import Column, DateTime, Enum, Integer, String, func
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
 
@@ -26,14 +25,14 @@ class RiskLevel(str, enum.Enum):
 class Url(Base):
     __tablename__ = "urls"
 
-    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     normalized_url = Column(String(2048), nullable=False)
-    # MySQL/RDS may reject indexing very long utf8mb4 strings; keep uniqueness on a fixed-size hash.
+    # Keep uniqueness on a fixed-size hash to avoid index length limits on long URLs.
     normalized_url_hash = Column(String(64), unique=True, nullable=False, index=True)
     current_risk_score = Column(Integer, nullable=True)  # 0–100, SRS §4.7 REQ-3
-    current_risk_level = Column(Enum(RiskLevel), nullable=True)
-    last_analyzed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    current_risk_level = Column(Enum(RiskLevel, name="risklevel"), nullable=True)
+    last_analyzed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     @staticmethod
     def compute_hash(normalized_url: str) -> str:

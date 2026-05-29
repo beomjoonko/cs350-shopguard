@@ -3,20 +3,21 @@ User Page endpoints — SRS §4.3.
 
   GET  /users/me            account info
   GET  /users/me/reports    list of reports submitted by current user (REQ-1)
-  POST /users/me/password   change password (REQ-5, REQ-6)
+
+Password change is handled directly by the frontend via
+supabase.auth.updateUser({ password: newPassword }) — no backend endpoint needed.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.core.security import hash_password, verify_password
 from app.models.report import Report
 from app.models.url import Url
 from app.models.user import User
 from app.schemas.report import ReportPublic
+from app.schemas.user import UserPublic
 from app.utils.report_public import report_to_public
-from app.schemas.user import PasswordChange, UserPublic
 
 router = APIRouter()
 
@@ -40,21 +41,3 @@ def my_reports(
         .all()
     )
     return [report_to_public(report, url_row) for report, url_row in rows]
-
-
-@router.post("/me/password", status_code=204)
-def change_password(
-    payload: PasswordChange,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """SRS §4.3 REQ-5: new password must differ from the current one."""
-    if not verify_password(payload.current_password, current_user.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-    if payload.current_password == payload.new_password:
-        raise HTTPException(
-            status_code=400,
-            detail="New password must differ from the current one",
-        )
-    current_user.password_hash = hash_password(payload.new_password)
-    db.commit()

@@ -30,22 +30,50 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  /**
+   * Register a new account.
+   * Calls the FastAPI backend which:
+   *   1. Checks the blacklist (server-side)
+   *   2. Creates the Supabase Auth user via Admin API
+   *   3. Provisions the local users row
+   */
   register: (email: string, password: string) =>
     request<User>("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
 
-  login: (email: string, password: string) =>
-    request<{ access_token: string; token_type: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-
   me: () => request<User>("/users/me"),
   myReports: () => request<Report[]>("/users/me/reports"),
-  changePassword: (currentPassword: string, newPassword: string) =>
-    request<void>("/users/me/password", {
+
+  /**
+   * Upload an evidence image to Supabase Storage.
+   * Returns the public URL of the uploaded file.
+   * The caller stores this URL in evidenceImageUrl before createReport().
+   */
+  uploadEvidence: async (file: File): Promise<{ url: string }> => {
+    const token = getToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    // Do NOT set Content-Type — let the browser set multipart/form-data boundary
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`${BASE_URL}/reports/upload-evidence`, {
       method: "POST",
-      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-    }),
+      headers,
+      body,
+    });
+    if (res.status === 401) {
+      clearToken();
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const b = await res.json();
+        detail = b.detail ?? detail;
+      } catch { /* noop */ }
+      throw new Error(detail);
+    }
+    return res.json() as Promise<{ url: string }>;
+  },
 
   createReport: (data: {
     url: string;

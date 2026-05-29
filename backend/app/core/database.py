@@ -2,7 +2,7 @@
 SQLAlchemy database setup.
 
 Provides:
-  - `engine`: SQLAlchemy engine bound to MySQL (per SRS §2.4)
+  - `engine`: SQLAlchemy engine bound to Supabase PostgreSQL (per SRS §2.4)
   - `SessionLocal`: factory for short-lived sessions
   - `Base`: declarative base for all ORM models
   - `get_db()`: FastAPI dependency that yields a session per request

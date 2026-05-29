@@ -1,10 +1,11 @@
 """
 Fraud Reporting endpoints — SRS §4.2.
 
-  POST /reports              submit a fraud report (REQ-1..5)
-  GET  /reports/{report_id}  fetch a report (own or admin)
+  POST /reports                   submit a fraud report (REQ-1..5)
+  GET  /reports/{report_id}       fetch a report (own or admin)
+  POST /reports/upload-evidence   upload evidence image to Supabase Storage
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -13,10 +14,40 @@ from app.models.report import Report, ReportStatus
 from app.models.url import Url
 from app.models.user import User, UserRole
 from app.schemas.report import ReportCreate, ReportPublic
+from app.services.storage import upload_evidence_image
 from app.utils.report_public import report_to_public
 from app.utils.url_normalizer import normalize_url
 
 router = APIRouter()
+
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_MAX_EVIDENCE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/upload-evidence", status_code=201)
+async def upload_evidence(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload an evidence image to Supabase Storage (SRS §3.3).
+
+    Returns the public URL of the uploaded file. The caller should store this
+    URL in the `evidence_image_url` field when submitting the fraud report.
+    """
+    contents = await file.read()
+
+    if len(contents) > _MAX_EVIDENCE_SIZE:
+        raise HTTPException(status_code=413, detail="File exceeds 5 MB limit")
+
+    if file.content_type not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported media type. Allowed: {', '.join(_ALLOWED_IMAGE_TYPES)}",
+        )
+
+    url = upload_evidence_image(contents, file.filename or "evidence.jpg")
+    return {"url": url}
 
 
 @router.post("", response_model=ReportPublic, status_code=201)

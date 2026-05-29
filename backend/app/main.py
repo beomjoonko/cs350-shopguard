@@ -2,25 +2,20 @@
 ShopGuard API — entry point.
 
 Stitches together: routers, middleware (CORS + rate limit per SRS §4.8),
-exception handlers, and lifespan events for DB/Redis connections.
+and lifespan events for DB connections.
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.api.v1.router import api_router
-from app.middleware.rate_limit import limiter
+from app.middleware.rate_limit import check_rate_limit
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: warm DB connections, ping Redis, etc.
-    # TODO: ping_redis(), check_db_connection()
     yield
-    # Shutdown: close pools
 
 
 app = FastAPI(
@@ -41,9 +36,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limit — SRS §4.8 REQ-1 (60 req/min per IP)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Rate limit — SRS §4.8 REQ-1 (60 req/min per IP)."""
+    await check_rate_limit(request)
+    return await call_next(request)
+
 
 # Routes
 app.include_router(api_router, prefix="/api/v1")

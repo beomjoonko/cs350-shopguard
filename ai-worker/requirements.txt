@@ -1,8 +1,7 @@
 # ─── Queue / DB ─────────────────────────────────────────────
 redis==5.1.1
 sqlalchemy==2.0.36
-pymysql==1.1.1
-cryptography==43.0.3
+psycopg2-binary==2.9.9
 
 # ─── Settings ───────────────────────────────────────────────
 pydantic==2.9.2

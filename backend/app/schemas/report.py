@@ -1,5 +1,6 @@
 """Pydantic schemas for fraud reports — SRS §4.2."""
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.models.report import FraudType, ReportStatus
@@ -16,9 +17,9 @@ class ReportCreate(BaseModel):
 
 
 class ReportPublic(BaseModel):
-    id: str
-    user_id: str
-    url_id: str
+    id: UUID
+    user_id: UUID
+    url_id: UUID
     fraud_type: FraudType
     description: str
     evidence_image_url: str | None

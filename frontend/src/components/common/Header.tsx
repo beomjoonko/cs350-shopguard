@@ -2,20 +2,33 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { clearToken, getRoleSnapshot, notifyAuthChange } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { clearToken, notifyAuthChange } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { useLoggedIn } from "@/hooks/useLoggedIn";
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const loggedIn = useLoggedIn();
-  const isAdmin = getRoleSnapshot() === "ADMIN";
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Re-read token after navigation (fixes stale Sign In/My Page toggle).
   useEffect(() => {
     notifyAuthChange();
   }, [pathname]);
+
+  // Fetch role from /users/me — the Supabase JWT no longer contains our
+  // app-level role, so we load it asynchronously after login.
+  useEffect(() => {
+    if (loggedIn) {
+      api.me()
+        .then((u) => setIsAdmin(u.role === "ADMIN"))
+        .catch(() => setIsAdmin(false));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [loggedIn]);
 
   function logout() {
     clearToken();
