@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ReportDetailModal } from "@/components/reports/ReportDetailModal";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { FRAUD_LABEL, statusBadge } from "@/lib/reportLabels";
 import type { Report, ReportStatus, User } from "@/types";
 
@@ -24,9 +25,8 @@ export default function MyPage() {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // password change state
+  // password change state — no "current password" needed with Supabase Auth
   const [showPwForm, setShowPwForm] = useState(false);
-  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState(false);
@@ -44,9 +44,11 @@ export default function MyPage() {
     setPwSuccess(false);
     setPwSubmitting(true);
     try {
-      await api.changePassword(currentPw, newPw);
+      // Supabase Auth handles the update — no "current password" required
+      // because the existing session proves identity.
+      const { error } = await supabase.auth.updateUser({ password: newPw });
+      if (error) throw new Error(error.message);
       setPwSuccess(true);
-      setCurrentPw("");
       setNewPw("");
       setShowPwForm(false);
     } catch (e) {
@@ -259,7 +261,7 @@ export default function MyPage() {
             </div>
           </div>
 
-          {/* Password change */}
+          {/* Password change — powered by Supabase Auth */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">Change Password</h2>
@@ -280,16 +282,8 @@ export default function MyPage() {
                 <input
                   type="password"
                   required
-                  placeholder="Current password"
-                  value={currentPw}
-                  onChange={(e) => setCurrentPw(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-                <input
-                  type="password"
-                  required
                   minLength={8}
-                  placeholder="New password (min. 8 chars, with numbers and special chars)"
+                  placeholder="New password (min. 8 chars)"
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                   className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"

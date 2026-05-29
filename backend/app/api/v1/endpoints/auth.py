@@ -1,54 +1,78 @@
 """
-Auth endpoints — SRS §4.1 User Account Management.
+Auth endpoints — post-Supabase migration.
 
-  POST /auth/register   create account                    (REQ-1)
-  POST /auth/login      issue JWT, count failures         (REQ-1, REQ-3)
-  POST /auth/password-reset/request   send reset email    (REQ-2)
-  POST /auth/password-reset/confirm   apply new password  (REQ-2)
+  POST /auth/register   blacklist check → create Supabase Auth user via Admin
+                        API → auto-provision local users row
+
+Login, password-change, and password-reset are now handled entirely by the
+Supabase JS SDK on the frontend. FastAPI only manages the one-time registration
+gate (blacklist check) that requires server-side enforcement.
 """
-from datetime import datetime, timedelta
+import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from supabase import create_client
 
 from app.config import settings
 from app.core.database import get_db
-from app.core.security import (
-    create_access_token,
-    hash_password,
-    verify_password,
-)
 from app.models.blacklist import Blacklist
 from app.models.user import User, UserRole, UserStatus
-from app.schemas.user import (
-    PasswordResetRequest,
-    TokenResponse,
-    UserLogin,
-    UserPublic,
-    UserRegister,
-)
+from app.schemas.user import UserPublic, UserRegister
 
 router = APIRouter()
 
 
+def _supabase_admin():
+    """Return a Supabase client authenticated with the service-role key."""
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+
+
 @router.post("/register", response_model=UserPublic, status_code=201)
 def register(payload: UserRegister, db: Session = Depends(get_db)):
-    """SRS §4.1 REQ-1 + §4.4 REQ-5 (blacklist enforcement)."""
+    """
+    Register a new account.
+
+    Flow:
+      1. Enforce blacklist (SRS §4.4 REQ-5)
+      2. Check for local duplicate
+      3. Create Supabase Auth user via Admin API (bypasses email confirmation)
+      4. Create local users row with the Supabase Auth UUID as supabase_uid
+    """
+    # 1. Blacklist gate
     if db.query(Blacklist).filter(Blacklist.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This email is not allowed to register",
         )
 
+    # 2. Local duplicate guard
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
 
+    # 3. Create user in Supabase Auth
+    try:
+        auth_response = _supabase_admin().auth.admin.create_user({
+            "email": payload.email,
+            "password": payload.password,
+            "email_confirm": True,  # skip email confirmation in dev
+        })
+    except Exception as exc:
+        # Supabase returns an error if the email already exists in auth.users
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Registration failed: {exc}",
+        )
+
+    supabase_uid = _uuid.UUID(str(auth_response.user.id))
+
+    # 4. Provision local users row
     user = User(
+        supabase_uid=supabase_uid,
         email=payload.email,
-        password_hash=hash_password(payload.password),
         role=UserRole.USER,
         status=UserStatus.ACTIVE,
     )
@@ -56,50 +80,3 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     return user
-
-
-@router.post("/login", response_model=TokenResponse)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
-    """SRS §4.1 REQ-3: lock account for 30 minutes after 5 failed attempts."""
-    user = db.query(User).filter(User.email == payload.email).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    # Check temporary lock
-    if user.locked_until and user.locked_until > datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail=f"Account locked until {user.locked_until.isoformat()}",
-        )
-
-    if user.status == UserStatus.SUSPENDED:
-        raise HTTPException(status_code=403, detail="Account suspended")
-
-    if not verify_password(payload.password, user.password_hash):
-        user.failed_login_attempts += 1
-        if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
-            user.locked_until = datetime.utcnow() + timedelta(
-                minutes=settings.LOGIN_LOCKOUT_MINUTES
-            )
-            user.failed_login_attempts = 0
-        db.commit()
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    # Success — reset counters
-    user.failed_login_attempts = 0
-    user.locked_until = None
-    db.commit()
-
-    token = create_access_token(subject=user.id, role=user.role.value)
-    return TokenResponse(access_token=token)
-
-
-@router.post("/password-reset/request", status_code=202)
-def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
-    """
-    SRS §4.1 REQ-2 — send reset email.
-
-    Always returns 202 to avoid leaking which emails are registered.
-    TODO: enqueue an email job via SMTP (SRS §3.4) with a signed reset token.
-    """
-    return {"detail": "If the address exists, a reset link has been sent."}

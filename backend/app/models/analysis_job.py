@@ -7,10 +7,9 @@ progresses.
 """
 import enum
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer
-from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, func
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
 
@@ -26,14 +25,14 @@ class JobStatus(str, enum.Enum):
 class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
 
-    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    url_id = Column(CHAR(36), ForeignKey("urls.id"), nullable=False, index=True)
-    status = Column(Enum(JobStatus), nullable=False, default=JobStatus.PENDING)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    url_id = Column(UUID(as_uuid=True), ForeignKey("urls.id"), nullable=False, index=True)
+    status = Column(Enum(JobStatus, name="jobstatus"), nullable=False, default=JobStatus.PENDING)
 
     # Score components — SRS §4.7 REQ-2
     ai_score = Column(Float, nullable=True)       # output of NLP model
     report_count = Column(Integer, nullable=True) # # of user reports for the URL
     final_risk_score = Column(Integer, nullable=True)  # 0–100, §4.7 REQ-3/4
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)

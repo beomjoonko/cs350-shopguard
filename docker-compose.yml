@@ -1,23 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -40,8 +21,6 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
@@ -55,8 +34,6 @@ services:
     restart: unless-stopped
     env_file: .env
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
@@ -80,5 +57,4 @@ services:
     command: npm run dev
 
 volumes:
-  mysql_data:
   redis_data:

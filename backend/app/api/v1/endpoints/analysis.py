@@ -69,7 +69,7 @@ def search_url(
     db.commit()
     db.refresh(job)
 
-    enqueue_analysis_job(job_id=job.id, url=normalized)
+    enqueue_analysis_job(job_id=str(job.id), url=normalized)
 
     return UrlAnalysisResult(
         url=normalized,

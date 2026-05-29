@@ -6,7 +6,7 @@ Runs a blocking BLPOP loop on the Redis analysis queue. For each job:
   1. Crawl the URL (worker/crawler) → CrawlSnapshot
   2. NLP analysis (worker/pipeline/nlp_analyzer)
   3. Compute final risk score (worker/scoring/risk_scorer)
-  4. Persist results to MySQL + cache in Redis
+  4. Persist results to PostgreSQL (Supabase) + cache in Redis
 
 In production this should be replaced or wrapped with Celery / RQ / Dramatiq
 once the team picks an orchestrator. For the skeleton we keep it minimal so
@@ -39,6 +39,10 @@ log = logging.getLogger("ai-worker")
 
 
 def _get_redis() -> redis.Redis:
+    import os
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        return redis.from_url(redis_url, decode_responses=True)
     return redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True)
 
 

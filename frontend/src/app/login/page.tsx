@@ -3,8 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { setToken } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 function safeNext(next: string | null): string {
   if (!next) return "/my-page";
@@ -26,8 +25,13 @@ function LoginForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await api.login(email, password);
-      setToken(res.access_token);
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError) throw new Error(authError.message);
+      // Session is automatically stored by the Supabase client in localStorage.
+      // onAuthStateChange fires → subscribeAuth notifies Header and other components.
       router.push(safeNext(searchParams.get("next")));
     } catch (e) {
       setError(String(e));

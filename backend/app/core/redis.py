@@ -8,11 +8,18 @@ import redis
 
 from app.config import settings
 
-redis_client = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    decode_responses=True,
-)
+import os as _os
+
+# Support both REDIS_URL (Upstash / cloud) and individual HOST+PORT (local Docker)
+_redis_url = _os.environ.get("REDIS_URL")
+if _redis_url:
+    redis_client = redis.from_url(_redis_url, decode_responses=True)
+else:
+    redis_client = redis.Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+    )
 
 
 # Queue keys — coordinate with ai-worker/worker/main.py

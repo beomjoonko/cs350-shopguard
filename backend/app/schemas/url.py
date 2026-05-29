@@ -1,5 +1,6 @@
 """Pydantic schemas for URL search and analysis — SRS §4.5."""
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, HttpUrl
 
 from app.models.url import RiskLevel
@@ -22,7 +23,7 @@ class UrlAnalysisResult(BaseModel):
 
 
 class AnalysisJobStatus(BaseModel):
-    job_id: str
+    job_id: UUID
     status: JobStatus
     final_risk_score: int | None = None
     risk_level: RiskLevel | None = None

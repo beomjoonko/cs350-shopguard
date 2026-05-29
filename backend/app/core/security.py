@@ -1,70 +1,33 @@
 """
-Security primitives — SRS §5.3.
+Security primitives — post-Supabase migration.
 
-  - Password hashing: Argon2 (RFC 9106)
-  - Token issuance: JWT (RFC 7519)
+JWT validation only: Supabase Auth issues and manages all tokens.
+FastAPI validates the Supabase-issued JWT using SUPABASE_JWT_SECRET.
 
-All sensitive crypto operations go through this module so we have a single
-place to audit / rotate algorithms.
+All password management (hashing, verification, reset) is now delegated
+to Supabase Auth. The Argon2 and token-issuance code has been removed.
 """
-from datetime import datetime, timedelta, timezone
-
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from jose import JWTError, jwt
 
 from app.config import settings
 
 
-_password_hasher = PasswordHasher(
-    time_cost=settings.ARGON2_TIME_COST,
-    memory_cost=settings.ARGON2_MEMORY_COST,
-    parallelism=settings.ARGON2_PARALLELISM,
-)
+def decode_supabase_token(token: str) -> dict | None:
+    """
+    Validate a Supabase-issued JWT and return its claims.
 
+    Supabase uses HS256 signed with SUPABASE_JWT_SECRET.
+    The `sub` claim contains the Supabase Auth user UUID.
+    The `aud` claim is always "authenticated" for user sessions.
 
-# ─── Password ───────────────────────────────────────────────
-def hash_password(plain_password: str) -> str:
-    """Hash a password using Argon2id (SRS §5.3)."""
-    return _password_hasher.hash(plain_password)
-
-
-def verify_password(plain_password: str, hashed: str) -> bool:
-    """Constant-time password verification."""
-    try:
-        _password_hasher.verify(hashed, plain_password)
-        return True
-    except VerifyMismatchError:
-        return False
-
-
-# ─── JWT ────────────────────────────────────────────────────
-def create_access_token(
-    subject: str | int,
-    role: str,
-    expires_delta: timedelta | None = None,
-) -> str:
-    """Issue a JWT access token. `subject` is the user id."""
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    payload = {
-        "sub": str(subject),
-        "role": role,
-        "exp": expire,
-        "type": "access",
-    }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-
-
-def decode_token(token: str) -> dict | None:
-    """Return token claims if valid, otherwise None."""
+    Returns None if the token is invalid, expired, or untrusted.
+    """
     try:
         return jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
+            settings.SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
         )
     except JWTError:
         return None

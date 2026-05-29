@@ -10,7 +10,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str = "mysql+pymysql://shopguard:changeme@mysql:3306/shopguard"
+    DATABASE_URL: str = "postgresql+psycopg2://postgres:changeme@db.xxx.supabase.co:5432/postgres"
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
 

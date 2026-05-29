@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useLayoutEffect, useState } from "react";
+import { Suspense, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -19,11 +19,14 @@ function ReportForm() {
   const params = useSearchParams();
   const router = useRouter();
   const queryString = params.toString();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [url, setUrl] = useState(params.get("url") ?? "");
   const [fraudType, setFraudType] = useState<FraudType>("NON_DELIVERY");
   const [description, setDescription] = useState("");
   const [evidenceImageUrl, setEvidenceImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +43,20 @@ function ReportForm() {
   }, [queryString, router]);
 
   const descOk = description.trim().length >= 20;
-  const canSubmit = authReady && consent && url.trim() !== "" && descOk && !submitting;
+  const canSubmit = authReady && consent && url.trim() !== "" && descOk && !submitting && !uploading;
+
+  async function uploadFile(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const { url: uploadedUrl } = await api.uploadEvidence(file);
+      setEvidenceImageUrl(uploadedUrl);
+    } catch (e) {
+      setUploadError(String(e));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,11 +79,22 @@ function ReportForm() {
     }
   }
 
-  function onDrop(e: React.DragEvent) {
+  async function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
-    const text = e.dataTransfer.getData("text/plain");
-    if (text) setEvidenceImageUrl(text);
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      await uploadFile(file);
+    } else {
+      // Fallback: accept pasted URL text
+      const text = e.dataTransfer.getData("text/plain");
+      if (text) setEvidenceImageUrl(text);
+    }
+  }
+
+  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) await uploadFile(file);
   }
 
   if (!authReady) {
@@ -140,7 +167,7 @@ function ReportForm() {
           </div>
         </div>
 
-        {/* Evidence upload */}
+        {/* Evidence upload — uploads to Supabase Storage */}
         <div>
           <label className="block text-sm font-medium text-slate-700">
             Evidence <span className="text-xs font-normal text-slate-400">(Optional)</span>
@@ -149,20 +176,47 @@ function ReportForm() {
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            className={`mt-1.5 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors ${
+            onClick={() => fileInputRef.current?.click()}
+            className={`mt-1.5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors ${
               dragging
                 ? "border-blue-400 bg-blue-50"
                 : "border-slate-300 bg-slate-50 hover:bg-slate-100"
             }`}
           >
-            <svg className="h-8 w-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <p className="mt-2 text-sm text-slate-500">Click to upload image</p>
-            <p className="text-xs text-slate-400">PNG, JPG (max 5MB)</p>
+            {uploading ? (
+              <p className="text-sm text-slate-500">Uploading…</p>
+            ) : evidenceImageUrl ? (
+              <>
+                <svg className="h-6 w-6 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <p className="mt-1 text-sm text-green-700">Image uploaded</p>
+                <p className="mt-0.5 max-w-full truncate text-xs text-slate-400">{evidenceImageUrl}</p>
+              </>
+            ) : (
+              <>
+                <svg className="h-8 w-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <p className="mt-2 text-sm text-slate-500">Click or drag to upload image</p>
+                <p className="text-xs text-slate-400">PNG, JPG, GIF, WebP (max 5 MB)</p>
+              </>
+            )}
           </div>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={onFileChange}
+          />
+          {uploadError && (
+            <p className="mt-1 text-xs text-red-600">{uploadError}</p>
+          )}
+          {/* Manual URL fallback */}
           <input
             type="url"
             value={evidenceImageUrl}

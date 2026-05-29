@@ -7,7 +7,9 @@ Admin endpoints — SRS §4.4.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from supabase import create_client
 
+from app.config import settings
 from app.core.database import get_db
 from app.core.dependencies import require_admin
 from app.core.redis import enqueue_analysis_job
@@ -56,7 +58,7 @@ def _enqueue_reanalysis_if_needed(
     db.add(job)
     db.commit()
     db.refresh(job)
-    enqueue_analysis_job(job_id=job.id, url=url_row.normalized_url)
+    enqueue_analysis_job(job_id=str(job.id), url=url_row.normalized_url)
 
 
 @router.get("/reports", response_model=list[ReportPublic])
@@ -91,7 +93,7 @@ def update_report_status(
 
     db.add(AdminAuditLog(
         admin_id=admin.id,
-        target_id=report.id,
+        target_id=str(report.id),
         action_type="UPDATE_REPORT_STATUS",
         reason=f"{old_status.value} -> {payload.status.value}",
     ))
@@ -113,28 +115,36 @@ def block_user(
     SRS §4.4 REQ-4..6:
       - mark user SUSPENDED → get_current_user denies further requests
       - add email to BLACKLIST → registration is blocked
+      - disable in Supabase Auth → token refresh is revoked
       - write audit log
-
-    NOTE: real session revocation would also push the JTI to a Redis denylist
-          checked by `decode_token`. Marked as TODO for now.
     """
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if target.id == admin.id:
+    if str(target.id) == str(admin.id):
         raise HTTPException(status_code=400, detail="Cannot block yourself")
 
     target.status = UserStatus.SUSPENDED
-    target.locked_until = None
 
     if not db.query(Blacklist).filter(Blacklist.email == target.email).first():
         db.add(Blacklist(email=target.email, reason=payload.reason))
 
     db.add(AdminAuditLog(
         admin_id=admin.id,
-        target_id=target.id,
+        target_id=str(target.id),
         action_type="BLOCK_USER",
         reason=payload.reason,
     ))
     db.commit()
-    # TODO: invalidate any active JWTs by adding their jti to a Redis denylist
+
+    # Disable in Supabase Auth so existing refresh tokens become invalid.
+    # "876600h" ≈ 100 years — effectively permanent.
+    try:
+        supabase_admin = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+        supabase_admin.auth.admin.update_user_by_id(
+            str(target.supabase_uid),
+            {"ban_duration": "876600h"},
+        )
+    except Exception:
+        # Local suspension is the authoritative gate; Supabase ban is best-effort.
+        pass
