@@ -82,12 +82,94 @@ Then open:
 make migrate
 ```
 
-### Run tests
+## Testing
+
+Each layer has **one consolidated test suite**, backed by a human-readable case
+catalogue in `docs/`. File names follow a unified `test_be` / `test_wk` /
+`test_fe` scheme.
+
+| Layer | Test file | Case catalogue | Cases |
+|---|---|---|---|
+| Backend (FastAPI) | `backend/tests/test_be.py` | `docs/backend_test_cases.csv` | TC-01–TC-65 |
+| AI Worker (pipeline + scoring) | `ai-worker/tests/test_wk.py` | `docs/worker_test_cases.csv` | WT-01–WT-26 |
+| Frontend (Next.js) | `frontend/src/__tests__/test_fe_lib.test.tsx` + `test_fe_pages.test.tsx` | `docs/frontend_test_cases.csv` | FT-01–FT-27 |
+
+Two backend suites are kept separate by design:
+- `backend/tests/test_smoke.py` — health/liveness smoke check
+- `backend/tests/test_mutation_lockout.py` — mutation testing of the lockout logic (own runner)
+
+### What each suite covers
+
+- **Backend** — REST endpoints (register, login + 5-attempt lockout, password
+  change, URL analysis, fraud reports, my-page, admin), an auth-enforcement
+  sweep over every protected route (TC-57), and security-config gates
+  (JWT secret strength, CORS — TC-60–65). Runs on in-memory SQLite, no external
+  services. The frontend split (`_lib` vs `_pages`) exists because the page
+  tests `jest.mock("@/lib/api")`, which would otherwise shadow the real client.
+- **AI Worker** — risk-score formula & level thresholds, NLP score blend /
+  fetch-failure fallback, URL feature extraction + ONNX classifier sanity, and
+  regression guards documenting known feature-extraction anomalies. Loads local
+  model artifacts only.
+- **Frontend** — pure lib logic (token/JWT decode, recent searches, label maps,
+  HTTP client 401/204/error handling) plus page-component bug documentation.
+  Runs in jsdom with `fetch` mocked.
+
+### How to run
+
+Each `make` target runs only that layer's consolidated case suite:
 
 ```bash
-make test-backend
-make test-frontend
+make test-backend     # docker compose exec backend pytest tests/test_be.py -v
+make test-frontend    # docker compose exec frontend npm test -- test_fe
+make test-worker      # docker compose exec ai-worker python -m pytest tests/test_wk.py -v
 ```
+
+Narrower / ad-hoc runs:
+
+```bash
+docker compose exec backend pytest tests/test_be.py -k tc09   # one TC group
+cd frontend && npm install && npm test -- test_fe_lib         # local, one file
+```
+
+Tests **not** covered by the `make` targets (run explicitly):
+
+```bash
+docker compose exec backend pytest tests/test_smoke.py -v             # smoke
+docker compose exec backend pytest tests/test_mutation_lockout.py -v  # mutation
+docker compose exec backend pytest -v                                 # every backend test
+make up && docker compose exec backend pytest tests/test_be.py -k "tc36 or tc37"  # Redis rate limit
+```
+
+### Expected results
+
+| Suite | Command | Expected |
+|---|---|---|
+| Backend | `pytest tests/test_be.py` | **83 passed, 3 skipped, 1 xfail/xpass** |
+| Worker | `pytest tests/test_wk.py` | **44 passed, 1 xfailed** |
+| Frontend | `npm test` | **30 passed** (2 suites) |
+
+Counts above are for a configured local run (`.env` present). In CI there is no
+`.env`, so the deployment-gate tests (TC-60/61/64) skip and the backend shows
+**80 passed, 6 skipped**.
+
+Intentional non-passes (these are **not** failures):
+
+- **Skipped — backend (3):** TC-19 (DANGER/CRITICAL modal is frontend-only) and
+  TC-36/37 (need a live Redis rate limiter). Run the rate-limit pair against a
+  running stack: `make up && docker compose exec backend pytest tests/test_be.py -k "tc36 or tc37"`.
+- **Skipped under default config — backend:** TC-60/61/64 are security-config
+  deployment gates; they enforce only when a real `.env` overrides the JWT secret
+  (so they pass locally and skip in CI rather than failing on placeholder config).
+- **xfail — backend TC-09a:** the lockout race condition is non-deterministic on
+  the in-memory SQLite harness (single shared connection); faithful concurrency
+  needs the MySQL backend.
+- **xfail — worker WT-21:** the URL classifier ranks a `.xyz` phishing URL below
+  `paypal.com` — a known domain-mismatch model-quality gap, tracked until retrain.
+- **Frontend FT-24/25** use Jest `it.failing` to document BUG-2 (admin status
+  filter missing `SUBMITTED`) while keeping the suite green; flip to `it` once fixed.
+
+The `Pass/Fail` column in each `docs/*_test_cases.csv` is intentionally blank for
+manual QA sign-off; only the xfail rows are pre-marked.
 
 ## Open Questions (from SRS Appendix C)
 

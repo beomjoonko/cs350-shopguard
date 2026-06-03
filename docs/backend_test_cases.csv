@@ -1,0 +1,70 @@
+TC ID,Feature Area,Test Case Name,Input / Precondition,Expected Result (Oracle),Actual Result,Pass/Fail,Notes
+TC-01,Registration,Successful registration,Valid email + password ≥ 8 chars,HTTP 201 · user created,,,
+TC-02,Registration,Duplicate email,Already registered email,HTTP 409 "Email already registered",,,
+TC-03,Registration,Password too short,Password with 7 characters (< 8),HTTP 422 validation error,,,
+TC-04,Registration,Invalid email format,Non-email string as email field,HTTP 422 validation error,,,
+TC-05,Registration,Blacklisted email,Email blocked by admin,HTTP 403 "This email is not allowed to register",,,
+TC-06,Login,Successful login,Valid email + correct password,HTTP 200 · access_token returned,,,
+TC-07,Login,Unknown email,Email not registered,HTTP 401 "Invalid credentials",,,
+TC-08,Login,Wrong password,Correct email + wrong password,HTTP 401 "Invalid credentials",,,
+TC-09,Login,5 consecutive failed logins lock account,Wrong password entered 5 times in a row,HTTP 423 · locked_until set · failed_login_attempts reset to 0,,,
+TC-09a,Login,Lockout counter race condition,5 wrong-password requests fired concurrently after lock expiry,"failed_login_attempts handled atomically (ends at 0, no lost update) · locked_until set",,xfail,Non-deterministic on in-memory SQLite (StaticPool single connection); needs MySQL/Docker for faithful concurrency. xfail(strict=False)
+TC-09b,Login,DB error during lockout commit,OperationalError injected on the 5th-failure commit,"HTTP 500 · transaction rolled back (counter stays 4, locked_until NULL) · subsequent real 5th failure still locks",,,Fault injection
+TC-09c,Login,Email-variant lockout bypass,5 failed logins using local-part-case / +tag variants of the email,Variant addresses treated as different accounts → original account counter unaffected (documents bypass),,,Known limitation — EmailStr lowercases domain only; local-part & +tag variants bypass the counter
+TC-09d,Login,Lockout config matrix,MAX_LOGIN_ATTEMPTS × LOGIN_LOCKOUT_MINUTES = {3/5/10} × {1/30/60} min,Lock triggers exactly at threshold · locked_until = now + minutes (±5 s),,,Parametrized — 9 combinations
+TC-10,Login,Login during lockout with correct password,Correct password submitted while account is locked,HTTP 423 (blocked until lockout expires),,,
+TC-11,Login,Login after 30-minute lockout expires,Correct password after 30 min have passed,HTTP 200 · token issued,,,
+TC-12,Login,Suspended account login,Account with SUSPENDED status,HTTP 403 "Account suspended",,,
+TC-13,Password Change,Successful password change,Correct current password + new password ≥ 8 chars,HTTP 204 · new password works on next login,,,
+TC-14,Password Change,Wrong current password,Incorrect current password supplied,HTTP 401 "Current password is incorrect",,,
+TC-15,Password Change,New password same as current,current_password == new_password,HTTP 400 "New password must differ...",,,
+TC-16,URL Analysis,Analysis request without login,URL search attempted without JWT token,HTTP 401,,,
+TC-17,URL Analysis,Normal URL analysis,https://en.wikipedia.org/wiki/Phishing,job_id returned → polling completes with COMPLETED + SAFE score,,,
+TC-18,URL Analysis,Re-analysis of cached URL,URL that has already been analyzed,cached: true · result returned immediately (no new job),,,
+TC-19,URL Analysis,Warning modal for high-risk URL,URL that results in DANGER or CRITICAL,Warning modal displayed on frontend,,,
+TC-20,URL Analysis,Job status polling sequence,Poll GET /analysis/jobs/{id} every 2 s during analysis,Status transitions: PENDING → CRAWLING → ANALYZING → COMPLETED,,,
+TC-21,URL Analysis,Invalid URL format,"Non-URL string (e.g. ""not-a-url"")",HTTP 422,,,
+TC-22,URL Analysis,Poll non-existent job ID,GET /analysis/jobs/{id} with unknown job_id,HTTP 404 "Job not found",,,
+TC-23,Fraud Report,Successful report submission,Valid URL + legal_consent=true + description ≥ 20 chars,HTTP 201 · report created,,,
+TC-24,Fraud Report,Report without legal consent,legal_consent=false,HTTP 400 "Legal consent is required",,,
+TC-25,Fraud Report,Description too short,Description with ≤ 19 characters,HTTP 422 validation error,,,
+TC-26,Fraud Report,Duplicate report for same URL,Same user reports the same URL again,HTTP 409 "You have already reported this URL",,,
+TC-27,Fraud Report,Report without login,Fraud report submitted without JWT token,HTTP 401,,,
+TC-28,My Page,Get own profile,GET /users/me,Returns own email · role · status,,,
+TC-29,My Page,Get own report list,GET /users/me/reports,Returns only the current user's reports (no other users' reports),,,
+TC-30,My Page,Access another user's report,GET /reports/{id} with another user's report_id,HTTP 403 "Forbidden",,,
+TC-31,Admin,Regular user accesses admin API,GET /admin/reports with regular user token,HTTP 403,,,
+TC-32,Admin,Admin views all reports,GET /admin/reports with admin token,Full report list returned,,,
+TC-33,Admin,Update report status,PATCH /admin/reports/{id} with new status,HTTP 200 · status updated · audit log created,,,
+TC-34,Admin,Block a user,POST /admin/users/{id}/block,HTTP 204 · user SUSPENDED · email added to blacklist,,,
+TC-35,Admin,Admin blocks themselves,Admin sends block request with own user_id,HTTP 400 "Cannot block yourself",,,
+TC-36,Rate Limit,Exceed request limit,61 requests from same IP within 1 minute,HTTP 429,,,
+TC-37,Rate Limit,Recovery after 429,Request sent after 1 minute cooldown following 429,Normal response resumed,,,Known limitation: Coupang URLs are misclassified as CRITICAL due to URL classifier domain mismatch (trained on general phishing data not e-commerce)
+TC-38,Registration,Password exactly 8 chars (boundary),Password with exactly 8 characters,HTTP 201 · user created,,,Boundary value
+TC-39,Login,Successful login resets failure counter,4 failed logins then 1 correct login,HTTP 200 · failed_login_attempts reset to 0 · no lock,,,
+TC-40,Auth,Valid JWT grants protected access,GET /users/me with a freshly issued login token,HTTP 200 · own profile returned,,,
+TC-41,Auth,Malformed JWT rejected,GET /users/me with a non-decodable Bearer token,HTTP 401,,,
+TC-42,Auth,Suspended user's existing token revoked,User suspended after token issuance · token reused on GET /users/me,HTTP 403 "Account is suspended",,,Session invalidation (SRS §4.4 REQ-4)
+TC-43,Password Change,Password change without auth,POST /users/me/password with no token,HTTP 401,,,
+TC-44,Password Change,New password too short,new_password with < 8 characters,HTTP 422 validation error,,,
+TC-45,URL Analysis,Tracking-param URL hits same cache,Cached URL re-searched with utm_*/fbclid query params,cached: true · same normalized result (REQ-2),,,URL normalization dedup
+TC-46,URL Analysis,Completed job exposes risk level,Poll a COMPLETED job whose URL has a risk level,HTTP 200 · status COMPLETED · risk_level populated,,,
+TC-47,Fraud Report,Description exactly 20 chars (boundary),Description with exactly 20 characters,HTTP 201 · report created,,,Boundary value
+TC-48,Fraud Report,Invalid fraud_type,fraud_type not in the allowed enum,HTTP 422 validation error,,,
+TC-49,Fraud Report,Get own report by ID,GET /reports/{id} for the caller's own report,HTTP 200 · report returned,,,
+TC-50,Fraud Report,Get non-existent report,GET /reports/{id} with an unknown report_id,HTTP 404 "Report not found",,,
+TC-51,Admin,Admin views another user's report,GET /reports/{id} for another user's report with admin token,HTTP 200 (admin role bypass),,,
+TC-52,My Page,Profile without auth,GET /users/me with no token,HTTP 401,,,
+TC-53,My Page,Empty report list,GET /users/me/reports for a user with no reports,HTTP 200 · empty list,,,
+TC-54,Admin,Update non-existent report status,PATCH /admin/reports/{id} with unknown report_id,HTTP 404 "Report not found",,,
+TC-55,Admin,Block non-existent user,POST /admin/users/{id}/block with unknown user_id,HTTP 404 "User not found",,,
+TC-56,Admin,Invalid report status value,PATCH /admin/reports/{id} with a status outside the enum,HTTP 422 validation error,,,
+TC-57,Auth,All protected endpoints require auth,8 protected endpoints called with no Bearer token,HTTP 401 for every endpoint,,,Parametrized sweep — BUG-1 regression guard (absorbed from test_qa_auth.py)
+TC-58,Auth,Health endpoint is public,GET /health without auth,HTTP 200,,,Liveness probe
+TC-59,Auth,Stats endpoint is public,GET /api/v1/stats without auth,Not HTTP 401 (public homepage counters),,,
+TC-60,Security,JWT secret not default,settings.JWT_SECRET_KEY,!= 'change-me-in-production',,,SEC-1 deployment gate — skipped under default CI config (no .env); enforced once JWT secret overridden
+TC-61,Security,JWT secret minimum length,len(settings.JWT_SECRET_KEY),>= 32 chars,,,SEC-1 — skipped under default CI config
+TC-62,Security,CORS allows configured origins,Request from each configured origin,Access-Control-Allow-Origin header present,,,SEC-2
+TC-63,Security,CORS blocks unknown origin,Request from attacker origin,No wildcard / attacker ACAO header,,,SEC-2
+TC-64,Security,CORS has production HTTPS origin,settings.cors_origins_list,At least one https:// origin,,,SEC-2 deployment gate — skipped under default CI config (no .env)
+TC-65,Security,CORS preflight succeeds,OPTIONS /analysis/search from known origin,HTTP 200 or 204,,,SEC-2

@@ -1,0 +1,27 @@
+TC ID,Component,Test Case Name,Input / Precondition,Expected Result (Oracle),Actual Result,Pass/Fail,Notes
+WT-01,Risk Scorer,Risk level boundary mapping,"score_to_level for 0/30/31/60/61/80/81/100",SAFE≤30 · WARNING 31–60 · DANGER 61–80 · CRITICAL 81–100,,,Parametrized boundary values
+WT-02,Risk Scorer,Final score stays within [0 100],ai_score & report_count at extremes (0/100/999),0 ≤ final_score ≤ 100,,,
+WT-03,Risk Scorer,AI weight exactness,ai_score=100 · report_count=0,final_score == 70 (0.7 × ai),,,Weight 0.7
+WT-04,Risk Scorer,Report weight exactness,ai_score=0 · report_count=10,final_score == 30 (0.3 × report_score),,,Weight 0.3
+WT-05,Risk Scorer,Report score cap,report_count=10 vs 50 with ai_score=0,Both give same score (report_score capped at 100),,,10 reports already saturates the cap
+WT-06,Risk Scorer,More reports increase score,ai_score fixed · report_count 0 vs 5,score(5 reports) > score(0 reports),,,Monotonicity
+WT-07,Risk Scorer,Blended score ranges,"(ai,reports) = {(0,0),(100,0),(0,10),(100,10),(50,5)}",Each result inside its expected band,,,Parametrized matrix
+WT-08,NLP Analyzer,No snapshot → URL-only score,compute_ai_score(url, snapshot=None),0 ≤ score ≤ 100,,,
+WT-09,NLP Analyzer,Failed fetch falls back to URL-only,snapshot with fetch_ok=False,Score equals the snapshot=None score,,,fetch_ok guard
+WT-10,NLP Analyzer,Successful fetch score in range,snapshot with fetch_ok=True + content,0 ≤ score ≤ 100,,,
+WT-11,NLP Analyzer,Blend is a convex combination,Successful snapshot · url+crawl component scores,min(url,crawl) ≤ blend ≤ max(url,crawl),,,Weights 0.6 crawl / 0.4 url
+WT-12,URL Classifier,Feature extraction completeness,extract_url_features(url),Returns exactly FEATURE_COLUMNS (no missing/extra),,,
+WT-13,URL Classifier,https_flag,https:// vs http:// URL,1 for https · 0 for http,,,
+WT-14,URL Classifier,url_length,Any URL,Equals len(url),,,
+WT-15,URL Classifier,has_ip_address,IP-host URL vs domain URL,1 for IP · 0 for domain,,,
+WT-16,URL Classifier,dot_count,Multi-subdomain URL,Equals url.count('.'),,,
+WT-17,URL Classifier,Suspicious file extension,.exe path vs .html path,1 for .exe · 0 for .html,,,
+WT-18,URL Classifier,URL entropy positive,Non-trivial URL,url_entropy > 0,,,
+WT-19,URL Classifier,Score always in range,Sample legit/phishing/IP/ftp URLs,0 ≤ score ≤ 100,,,Parametrized sample set
+WT-20,URL Classifier,IP-HTTP scores above legit HTTPS,bare-IP http URL vs https domain,IP URL risk > legit domain risk,,,Directional plausibility
+WT-21,URL Classifier,Suspicious TLD scores above popular TLD,.xyz phishing URL vs .com URL,.xyz risk > .com risk,,xfail,Known limitation — URL classifier domain mismatch; .xyz currently mis-ranked below .com (xfail until model retrained)
+WT-22,URL Classifier,query_param_count 1-based quirk,URL with no query string,query_param_count == 1 (off-by-one anomaly),,,Documents known feature-extraction anomaly
+WT-23,URL Classifier,tld_length includes port,host example.com:8080,tld_length == len('com:8080') == 8,,,Documents known anomaly
+WT-24,URL Classifier,subdomain_count compound-TLD inflation,host shop.example.co.uk,subdomain_count == 2 (inflated by compound TLD),,,Documents known anomaly
+WT-25,URL Classifier,tld_popularity port quirk,host example.com:8080,tld_popularity == 0 (port breaks popular-TLD match),,,Documents known anomaly
+WT-26,Config,Worker settings defaults,get_settings(),CRAWLER_REQUEST_DELAY_MS == 1000 · user agent starts with ShopGuardBot,,,
