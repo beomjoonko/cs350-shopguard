@@ -1041,3 +1041,15 @@ def test_tc65_cors_preflight(client):
         },
     )
     assert resp.status_code in (200, 204)
+
+
+# TC-66 — a hostname the crawler can't IDNA-encode is rejected up front (422)
+# (a DNS label > 63 chars would otherwise crash the worker → "Analysis failed")
+def test_tc66_unencodable_hostname_rejected(client, auth_headers):
+    long_label = "a" * 70  # exceeds the 63-byte DNS label limit
+    with patch(_MOCK_ANALYSIS_ENQUEUE) as mock_enqueue:
+        res = client.post(
+            SEARCH, json={"url": f"https://{long_label}.com"}, headers=auth_headers
+        )
+    assert res.status_code == 422
+    mock_enqueue.assert_not_called()  # rejected before any job is enqueued

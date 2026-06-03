@@ -68,3 +68,4 @@ TC-62,Security,CORS allows configured origins,Request from each configured origi
 TC-63,Security,CORS blocks unknown origin,Request from attacker origin,No wildcard / attacker ACAO header,,,SEC-2
 TC-64,Security,CORS has production HTTPS origin,settings.cors_origins_list,At least one https:// origin,,,SEC-2 deployment gate — skipped under default CI config (no .env)
 TC-65,Security,CORS preflight succeeds,OPTIONS /analysis/search from known origin,HTTP 200 or 204,,,SEC-2
+TC-66,URL Analysis,Unencodable hostname rejected up front,URL with a DNS label > 63 chars (IDNA fails),HTTP 422 · no job enqueued,,,Screens out URLs that would crash the crawler (idna "label too long") before reaching the worker/AI
