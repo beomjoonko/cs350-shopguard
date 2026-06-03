@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { addRecentSearch } from "@/lib/recentSearches";
+import { withScheme } from "@/lib/url";
 import { useLoggedIn } from "@/hooks/useLoggedIn";
 import type { RiskLevel, UrlAnalysisResult } from "@/types";
 
@@ -80,6 +81,7 @@ function SearchResults() {
   const router = useRouter();
   const loggedIn = useLoggedIn();
   const url = params.get("url") ?? "";
+  const analyzeUrl = withScheme(url);
 
   const [result, setResult] = useState<UrlAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,12 +90,12 @@ function SearchResults() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    if (!url) return;
+    if (!analyzeUrl) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
 
-    addRecentSearch(url);
+    addRecentSearch(analyzeUrl);
     setError(null);
     setResult(null);
     setFinalScore(null);
@@ -102,7 +104,7 @@ function SearchResults() {
 
     const startSearch = async () => {
       try {
-        const response = await api.searchUrl(url);
+        const response = await api.searchUrl(analyzeUrl);
         if (!cancelled) setResult(response);
       } catch (e) {
         attempts += 1;
@@ -119,7 +121,7 @@ function SearchResults() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [url]);
+  }, [analyzeUrl]);
 
   // poll job until completed
   useEffect(() => {
@@ -308,7 +310,7 @@ function SearchResults() {
           <button
             onClick={() => {
               setResult(null);
-              api.searchUrl(url).then(setResult).catch((e) => setError(String(e)));
+              api.searchUrl(analyzeUrl).then(setResult).catch((e) => setError(String(e)));
             }}
             className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >

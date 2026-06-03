@@ -76,13 +76,19 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Account suspended")
 
     if not verify_password(payload.password, user.password_hash):
-        user.failed_login_attempts += 1
+        # Atomic increment at DB level to prevent race condition on concurrent requests
+        db.query(User).filter(User.id == user.id).update(
+            {User.failed_login_attempts: User.failed_login_attempts + 1},
+            synchronize_session="fetch",
+        )
+        db.commit()
+        db.refresh(user)
         if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
             user.locked_until = datetime.utcnow() + timedelta(
                 minutes=settings.LOGIN_LOCKOUT_MINUTES
             )
             user.failed_login_attempts = 0
-        db.commit()
+            db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Success — reset counters

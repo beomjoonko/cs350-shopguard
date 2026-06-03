@@ -3,6 +3,27 @@ import type { Report, UrlAnalysisResult, User, FraudType, PlatformStats } from "
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+/**
+ * FastAPI returns `detail` as a string for HTTPException, but as an array of
+ * error objects for 422 validation errors. Flatten both into a readable string
+ * so the UI never shows "[object Object]".
+ */
+function normalizeDetail(detail: unknown): string | null {
+  if (detail == null) return null;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((e) => (e && typeof e === "object" && "msg" in e ? String((e as { msg: unknown }).msg) : String(e)))
+      .filter(Boolean);
+    return msgs.length ? msgs.join("; ") : null;
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -20,7 +41,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body.detail ?? detail;
+      detail = normalizeDetail(body.detail) ?? detail;
     } catch { /* noop */ }
     throw new Error(detail);
   }

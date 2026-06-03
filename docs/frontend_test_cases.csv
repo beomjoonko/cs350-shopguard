@@ -1,0 +1,31 @@
+TC ID,Area,Test Case Name,Input / Precondition,Expected Result (Oracle),Actual Result,Pass/Fail,Notes
+FT-01,Auth (token),getToken when unset,No token in localStorage,Returns null,,,
+FT-02,Auth (token),setToken then getToken,setToken('abc'),getToken() returns 'abc',,,
+FT-03,Auth (token),clearToken removes token,Token set then cleared,getToken() returns null,,,
+FT-04,Auth (token),setToken fires auth-change event,Listener on shopguard:auth-change,Event dispatched on setToken,,,Same-tab UI sync
+FT-05,Auth (token),getLoggedInSnapshot reflects token,Token present vs absent,true when present · false when absent,,,
+FT-06,Auth (token),getRoleSnapshot decodes JWT role,Token with base64url payload {role:'ADMIN'},Returns 'ADMIN',,,
+FT-07,Auth (token),getRoleSnapshot on malformed token,Token that is not valid JWT,Returns null (no throw),,,
+FT-08,Auth (token),subscribeAuth callback + unsubscribe,Subscribe then trigger then unsubscribe,Callback runs on change · stops after unsubscribe,,,
+FT-09,Recent Searches,getRecentSearches when unset,Empty localStorage,Returns [],,,
+FT-10,Recent Searches,addRecentSearch adds item,addRecentSearch('https://a.com'),List contains the URL at front,,,
+FT-11,Recent Searches,addRecentSearch de-duplicates,Add same URL twice (with others between),Single entry · moved to front,,,
+FT-12,Recent Searches,addRecentSearch caps at 5,Add 6 distinct URLs,Only 5 most-recent kept,,,MAX_ITEMS
+FT-13,Recent Searches,addRecentSearch ignores blanks,addRecentSearch('   '),List unchanged,,,
+FT-14,Recent Searches,getRecentSearches tolerates corrupt JSON,localStorage holds invalid JSON,Returns [] (no throw),,,
+FT-15,Report Labels,statusBadge known status,statusBadge('ACTIVE'),Returns label 'Approved' with classes,,,
+FT-16,Report Labels,statusBadge unknown status,statusBadge('WEIRD'),Fallback badge with raw label echoed,,,
+FT-17,Report Labels,FRAUD_LABEL covers all fraud types,All 6 FraudType keys,Every key maps to a human label,,,
+FT-18,Report Labels,RISK_BADGE covers all risk levels,SAFE/WARNING/DANGER/CRITICAL,Each maps to a badge with label,,,
+FT-19,API client,Authorization header attached,getToken returns a token · mocked fetch,Request sent with 'Bearer <token>' header,,,
+FT-20,API client,401 clears token and throws,fetch resolves status 401,Token cleared · throws 'Unauthorized',,,
+FT-21,API client,204 returns undefined,fetch resolves status 204,Resolves to undefined (no JSON parse),,,
+FT-22,API client,Non-ok throws backend detail,fetch 400 with {detail:'bad'},Throws Error('bad'),,,
+FT-23,API client,login posts to /auth/login,api.login(email,pw) · mocked fetch,POST /auth/login with JSON body,,,
+FT-24,Admin page,Status filter includes SUBMITTED,Render AdminPage,Dropdown contains 'SUBMITTED',,xfail,BUG-2 — admin dropdown currently missing SUBMITTED (it.failing until fixed)
+FT-25,Admin page,Status filter shows all 8 statuses,Render AdminPage,Dropdown has ALL + 8 SRS statuses,,xfail,BUG-2 — same root cause as FT-24
+FT-26,Search page,Hardcoded AI confidence literal,search/page.tsx source,Source still contains literal '82%',,,BUG-4 — documents hardcoded value; flip when real confidence wired
+FT-27,Search page,Unauthorized search shows error,searchUrl rejects with 'Unauthorized',Error message rendered (no redirect),,xfail,BUG-1 — should redirect to /login; currently only shows error (it.failing until fixed)
+FT-28,URL helper,withScheme prepends https to bare domain,"withScheme('coupang.com/x')",Returns 'https://coupang.com/x',,,BUG-FIX — bare domains were rejected with 422 'relative URL without a base'
+FT-29,URL helper,withScheme leaves schemed URL unchanged,http/https/whitespace/empty inputs,Existing scheme preserved · trimmed · '' stays '',,,
+FT-30,API client,422 validation array rendered readably,Non-ok 422 with detail as object array,"Error message is the joined msg (not '[object Object]')",,,BUG-FIX — api.ts now flattens FastAPI 422 detail arrays
