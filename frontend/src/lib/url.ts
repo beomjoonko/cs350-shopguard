@@ -12,3 +12,22 @@ export function withScheme(url: string): string {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
+
+/**
+ * Whether a pasted link can actually be analyzed. Mirrors the backend's
+ * hostname check (is_hostname_encodable): the URL must parse and every DNS
+ * label must be IDNA-encodable, i.e. ≤ 63 bytes. The browser's URL parser
+ * already converts an IDN host to punycode, so a label that overflows 63
+ * bytes is exactly what the backend would reject with a 422. Validating here
+ * lets the search page show an inline message without navigating away.
+ */
+export function isAnalyzableUrl(input: string): boolean {
+  let host: string;
+  try {
+    host = new URL(withScheme(input)).hostname; // browser applies IDNA → punycode
+  } catch {
+    return false;
+  }
+  if (!host) return false;
+  return host.split(".").every((label) => label.length > 0 && label.length <= 63);
+}

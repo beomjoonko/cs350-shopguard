@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { addRecentSearch, getRecentSearches } from "@/lib/recentSearches";
+import { isAnalyzableUrl } from "@/lib/url";
 import type { PlatformStats } from "@/types";
 
 const STAT_CARDS = [
@@ -55,6 +56,7 @@ function formatCount(n: number | undefined): string {
 export default function HomePage() {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
@@ -71,6 +73,13 @@ export default function HomePage() {
   function goSearch(target: string) {
     const trimmed = target.trim();
     if (!trimmed) return;
+    // Validate before navigating so an un-analyzable link (e.g. a hostname that
+    // breaks IDNA encoding) shows a message here instead of on the result page.
+    if (!isAnalyzableUrl(trimmed)) {
+      setError("This link can't be analyzed. Please enter a valid URL.");
+      return;
+    }
+    setError(null);
     setRecentSearches(addRecentSearch(trimmed));
     router.push(`/search?url=${encodeURIComponent(trimmed)}`);
   }
@@ -118,8 +127,9 @@ export default function HomePage() {
           <input
             type="text"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => { setUrl(e.target.value); setError(null); }}
             placeholder="Paste product link here"
+            aria-invalid={error ? true : undefined}
             className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
           />
         </div>
@@ -137,6 +147,12 @@ export default function HomePage() {
           Search
         </button>
       </form>
+
+      {error && (
+        <p role="alert" className="mt-2 w-full max-w-2xl text-left text-sm text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="mt-10 grid w-full max-w-2xl grid-cols-3 gap-4">
         {STAT_CARDS.map((s) => (

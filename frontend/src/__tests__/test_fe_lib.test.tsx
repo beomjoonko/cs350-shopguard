@@ -25,7 +25,7 @@ import {
 } from "@/lib/auth";
 import { getRecentSearches, addRecentSearch } from "@/lib/recentSearches";
 import { statusBadge, FRAUD_LABEL, RISK_BADGE } from "@/lib/reportLabels";
-import { withScheme } from "@/lib/url";
+import { withScheme, isAnalyzableUrl } from "@/lib/url";
 
 beforeEach(() => {
   localStorage.clear();
@@ -200,6 +200,19 @@ describe("withScheme", () => {
     expect(withScheme("http://a.com")).toBe("http://a.com");
     expect(withScheme("  https://a.com  ")).toBe("https://a.com"); // trims
     expect(withScheme("")).toBe("");
+  });
+
+  // FT-32 — accepts analyzable links (valid host, labels ≤ 63 chars)
+  it("isAnalyzableUrl accepts a normal link (with or without scheme)", () => {
+    expect(isAnalyzableUrl("https://www.coupang.com/vp/products/123")).toBe(true);
+    expect(isAnalyzableUrl("coupang.com")).toBe(true);
+  });
+
+  // FT-33 — rejects un-analyzable links (DNS label > 63 chars, or unparseable)
+  it("isAnalyzableUrl rejects a host whose label exceeds 63 chars or won't parse", () => {
+    expect(isAnalyzableUrl(`https://${"a".repeat(70)}.com`)).toBe(false);
+    expect(isAnalyzableUrl("")).toBe(false);
+    expect(isAnalyzableUrl("https://")).toBe(false);
   });
 });
 
