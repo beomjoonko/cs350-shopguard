@@ -48,3 +48,22 @@ def normalize_url(raw_url: str) -> str:
     query = urlencode(query_pairs)
 
     return urlunsplit((scheme, netloc, path, query, ""))
+
+
+def is_hostname_encodable(url: str) -> bool:
+    """Whether the URL's hostname can be IDNA-encoded.
+
+    The crawler's HTTP client (httpx) IDNA-encodes the host before connecting;
+    a DNS label longer than 63 bytes — or invalid non-ASCII — raises
+    UnicodeError there and crashes the analysis job. We screen for the exact
+    same condition (built-in `idna` codec) at the API boundary so such URLs are
+    rejected up front instead of reaching the worker / AI pipeline.
+    """
+    host = urlsplit(url).hostname
+    if not host:
+        return False
+    try:
+        host.encode("idna")
+    except (UnicodeError, ValueError):
+        return False
+    return True

@@ -22,7 +22,7 @@ from app.schemas.url import (
     UrlAnalysisResult,
     UrlSearchRequest,
 )
-from app.utils.url_normalizer import normalize_url
+from app.utils.url_normalizer import is_hostname_encodable, normalize_url
 
 router = APIRouter()
 
@@ -35,6 +35,16 @@ def search_url(
 ):
     """SRS §4.5 REQ-1..6."""
     normalized = normalize_url(str(payload.url))
+
+    # Reject hostnames the crawler's HTTP client can't IDNA-encode (e.g. a DNS
+    # label > 63 chars or invalid non-ASCII). These would otherwise crash the
+    # worker mid-pipeline and surface as a confusing "Analysis failed".
+    if not is_hostname_encodable(normalized):
+        raise HTTPException(
+            status_code=422,
+            detail="URL hostname is invalid or too long to analyze",
+        )
+
     normalized_hash = Url.compute_hash(normalized)
 
     url_row = db.query(Url).filter(Url.normalized_url_hash == normalized_hash).first()

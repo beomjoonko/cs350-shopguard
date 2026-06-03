@@ -144,13 +144,13 @@ make up && docker compose exec backend pytest tests/test_be.py -k "tc36 or tc37"
 
 | Suite | Command | Expected |
 |---|---|---|
-| Backend | `pytest tests/test_be.py` | **83 passed, 3 skipped, 1 xfail/xpass** |
+| Backend | `pytest tests/test_be.py` | **85 passed, 3 skipped, 1 xfail/xpass** |
 | Worker | `pytest tests/test_wk.py` | **44 passed, 1 xfailed** |
-| Frontend | `npm test` | **30 passed** (2 suites) |
+| Frontend | `npm test` | **32 passed** (2 suites) |
 
 Counts above are for a configured local run (`.env` present). In CI there is no
 `.env`, so the deployment-gate tests (TC-60/61/64) skip and the backend shows
-**80 passed, 6 skipped**.
+**82 passed, 6 skipped**.
 
 Intentional non-passes (these are **not** failures):
 

@@ -29,3 +29,5 @@ FT-27,Search page,Unauthorized search shows error,searchUrl rejects with 'Unauth
 FT-28,URL helper,withScheme prepends https to bare domain,"withScheme('coupang.com/x')",Returns 'https://coupang.com/x',,,BUG-FIX — bare domains were rejected with 422 'relative URL without a base'
 FT-29,URL helper,withScheme leaves schemed URL unchanged,http/https/whitespace/empty inputs,Existing scheme preserved · trimmed · '' stays '',,,
 FT-30,API client,422 validation array rendered readably,Non-ok 422 with detail as object array,"Error message is the joined msg (not '[object Object]')",,,BUG-FIX — api.ts now flattens FastAPI 422 detail arrays
+FT-32,URL helper,isAnalyzableUrl accepts valid link,"Normal URL (with/without scheme)",Returns true,,,Client pre-check mirrors backend is_hostname_encodable
+FT-33,URL helper,isAnalyzableUrl rejects un-analyzable link,Host label > 63 chars / whitespace / non-http(s) scheme / unparseable,Returns false,,,Used by homepage to show inline error before navigating

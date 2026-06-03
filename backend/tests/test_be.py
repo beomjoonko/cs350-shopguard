@@ -1041,3 +1041,59 @@ def test_tc65_cors_preflight(client):
         },
     )
     assert resp.status_code in (200, 204)
+
+
+# TC-66 — a hostname the crawler can't IDNA-encode is rejected up front (422)
+# (a DNS label > 63 chars would otherwise crash the worker → "Analysis failed")
+def test_tc66_unencodable_hostname_rejected(client, auth_headers):
+    long_label = "a" * 70  # exceeds the 63-byte DNS label limit
+    with patch(_MOCK_ANALYSIS_ENQUEUE) as mock_enqueue:
+        res = client.post(
+            SEARCH, json={"url": f"https://{long_label}.com"}, headers=auth_headers
+        )
+    assert res.status_code == 422
+    mock_enqueue.assert_not_called()  # rejected before any job is enqueued
+
+
+def _fuzz_url_inputs(n=120, seed=20260603):
+    """A deterministic corpus of random + hand-picked nasty URL inputs."""
+    import random
+    import string
+
+    rng = random.Random(seed)
+    charset = (
+        string.ascii_letters + string.digits
+        + "-._~:/?#[]@!$&'()*+,;= %"        # URL/reserved chars + space
+        + "한글가나다🎉<>\"\\|^`{}"          # unicode + unsafe chars
+    )
+    schemes = ["", "http://", "https://", "https://", "ftp://", "://", "HtTpS://"]
+    cases = [rng.choice(schemes) + "".join(rng.choice(charset) for _ in range(rng.randint(0, 60)))
+             for _ in range(n)]
+    cases += [
+        "https://" + "a" * 100 + ".com",          # DNS label > 63
+        "https://" + "한" * 40 + ".com",           # long IDN
+        "http://192.168.0.1:99999/x",             # out-of-range port
+        "http://host:notaport/x",                 # non-numeric port
+        "https://exa mple.com",                   # space in host
+        "https://.com", "https://..", "http://",  # empty labels / missing host
+        "https://[::1]/x", "https://user:pass@h.com/p",
+        "https://" + "x" * 1000 + ".com/path",    # long but under the column limit
+        "javascript:alert(1)", "data:text/html,x",
+    ]
+    return cases
+
+
+# TC-67 — fuzz the analysis search endpoint: random/malformed URLs never 500
+# Every input must be either accepted (200) or rejected with a validation error
+# (422) — the endpoint must never raise an unhandled exception.
+def test_tc67_search_url_fuzz(client, auth_headers):
+    unexpected = []
+    with patch(_MOCK_ANALYSIS_ENQUEUE):
+        for raw in _fuzz_url_inputs():
+            res = client.post(SEARCH, json={"url": raw}, headers=auth_headers)
+            if res.status_code not in (200, 422):
+                unexpected.append((raw[:60], res.status_code))
+    assert not unexpected, (
+        f"{len(unexpected)} input(s) returned an unexpected status "
+        f"(expected 200 or 422, never 500): {unexpected[:10]}"
+    )
