@@ -29,12 +29,15 @@ export function isAnalyzableUrl(input: string): boolean {
   // navigates. Note the URL parser silently strips tabs/newlines, which would
   // otherwise let a mistyped host through — this guard covers that too.
   if (/\s/.test(trimmed)) return false;
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(withScheme(trimmed)).hostname; // browser applies IDNA → punycode
+    parsed = new URL(withScheme(trimmed)); // browser applies IDNA → punycode
   } catch {
     return false;
   }
+  // Only http/https can be analyzed; the backend rejects other schemes (ftp:, …).
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const host = parsed.hostname;
   if (!host) return false;
   return host.split(".").every((label) => label.length > 0 && label.length <= 63);
 }

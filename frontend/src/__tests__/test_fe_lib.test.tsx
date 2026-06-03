@@ -213,6 +213,7 @@ describe("withScheme", () => {
     expect(isAnalyzableUrl(`https://${"a".repeat(70)}.com`)).toBe(false);
     expect(isAnalyzableUrl("cou pang.com")).toBe(false);      // space in host
     expect(isAnalyzableUrl("https://google .com")).toBe(false);
+    expect(isAnalyzableUrl("ftp://files.example.com")).toBe(false);  // non-http(s) scheme
     expect(isAnalyzableUrl("")).toBe(false);
     expect(isAnalyzableUrl("https://")).toBe(false);
     // leading/trailing whitespace is fine (trimmed)
