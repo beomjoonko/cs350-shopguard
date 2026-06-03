@@ -22,9 +22,16 @@ export function withScheme(url: string): string {
  * lets the search page show an inline message without navigating away.
  */
 export function isAnalyzableUrl(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+  // Internal whitespace can never be part of a valid hostname (the backend
+  // rejects it with "invalid domain character"); reject it up front so it never
+  // navigates. Note the URL parser silently strips tabs/newlines, which would
+  // otherwise let a mistyped host through — this guard covers that too.
+  if (/\s/.test(trimmed)) return false;
   let host: string;
   try {
-    host = new URL(withScheme(input)).hostname; // browser applies IDNA → punycode
+    host = new URL(withScheme(trimmed)).hostname; // browser applies IDNA → punycode
   } catch {
     return false;
   }

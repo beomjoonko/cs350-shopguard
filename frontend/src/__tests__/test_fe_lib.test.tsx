@@ -208,11 +208,15 @@ describe("withScheme", () => {
     expect(isAnalyzableUrl("coupang.com")).toBe(true);
   });
 
-  // FT-33 — rejects un-analyzable links (DNS label > 63 chars, or unparseable)
-  it("isAnalyzableUrl rejects a host whose label exceeds 63 chars or won't parse", () => {
+  // FT-33 — rejects un-analyzable links (label > 63, whitespace, unparseable)
+  it("isAnalyzableUrl rejects bad links: long label, internal whitespace, unparseable", () => {
     expect(isAnalyzableUrl(`https://${"a".repeat(70)}.com`)).toBe(false);
+    expect(isAnalyzableUrl("cou pang.com")).toBe(false);      // space in host
+    expect(isAnalyzableUrl("https://google .com")).toBe(false);
     expect(isAnalyzableUrl("")).toBe(false);
     expect(isAnalyzableUrl("https://")).toBe(false);
+    // leading/trailing whitespace is fine (trimmed)
+    expect(isAnalyzableUrl("  coupang.com  ")).toBe(true);
   });
 });
 
