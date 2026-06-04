@@ -17,4 +17,8 @@ def make_user(db, email, password, role=UserRole.USER, status=UserStatus.ACTIVE)
 
 
 def get_token(user):
-    return create_access_token(subject=user.id, role=user.role.value)
+    return create_access_token(
+        subject=user.id,
+        role=user.role.value,
+        token_version=user.token_version,
+    )

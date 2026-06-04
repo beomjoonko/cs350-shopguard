@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ReportDetailModal } from "@/components/reports/ReportDetailModal";
 import { api } from "@/lib/api";
 import { FRAUD_LABEL, statusBadge } from "@/lib/reportLabels";
 import type { Report, ReportStatus, User } from "@/types";
+import { passwordComplexityError, PASSWORD_COMPLEXITY_HINT } from "@/lib/passwordPolicy";
 
 type Tab = "reports" | "account";
 
@@ -15,7 +17,9 @@ const STATUS_FILTERS: { label: string; value: ReportStatus | "ALL" }[] = [
   { label: "Hidden",   value: "HIDDEN" },
 ];
 
-export default function MyPage() {
+function MyPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>("reports");
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "ALL">("ALL");
 
@@ -23,6 +27,7 @@ export default function MyPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reportSubmitSuccess, setReportSubmitSuccess] = useState(false);
 
   // password change state
   const [showPwForm, setShowPwForm] = useState(false);
@@ -33,6 +38,14 @@ export default function MyPage() {
   const [pwSubmitting, setPwSubmitting] = useState(false);
 
   useEffect(() => {
+    if (searchParams.get("reportSubmitted") === "1") {
+      setReportSubmitSuccess(true);
+      setTab("reports");
+      router.replace("/my-page");
+    }
+  }, [searchParams, router]);
+
+  useEffect(() => {
     Promise.all([api.me(), api.myReports()])
       .then(([u, r]) => { setUser(u); setReports(r); })
       .catch((e) => setLoadError(String(e)));
@@ -40,6 +53,11 @@ export default function MyPage() {
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
+    const complexityErr = passwordComplexityError(newPw);
+    if (complexityErr) {
+      setPwError(complexityErr);
+      return;
+    }
     setPwError(null);
     setPwSuccess(false);
     setPwSubmitting(true);
@@ -89,6 +107,22 @@ export default function MyPage() {
         <h1 className="text-2xl font-bold text-slate-900">My Page</h1>
         <p className="mt-1 text-sm text-slate-500">Manage your information and reports</p>
       </div>
+
+      {reportSubmitSuccess && (
+        <div
+          className="flex items-start justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800"
+          role="status"
+        >
+          <p>Your fraud report was submitted successfully.</p>
+          <button
+            type="button"
+            onClick={() => setReportSubmitSuccess(false)}
+            className="shrink-0 text-xs font-medium text-green-700 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
@@ -193,20 +227,8 @@ export default function MyPage() {
                     )}
                     <p className="mt-1 text-sm text-slate-600 line-clamp-2">{r.description}</p>
                     <p className="mt-2 text-xs text-slate-400">Click for details</p>
-                    {r.evidence_image_url && (
-                      <a
-                        href={r.evidence_image_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                      >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                        </svg>
-                        View Evidence
-                      </a>
+                    {(r.has_evidence || r.evidence_image_url) && (
+                      <p className="mt-2 text-xs text-slate-500">Includes evidence image</p>
                     )}
                   </li>
                 );
@@ -294,6 +316,7 @@ export default function MyPage() {
                   onChange={(e) => setNewPw(e.target.value)}
                   className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 />
+                <p className="text-xs text-slate-500">{PASSWORD_COMPLEXITY_HINT}</p>
                 {pwError && <p className="text-sm text-red-600">{pwError}</p>}
                 <button
                   type="submit"
@@ -308,5 +331,18 @@ export default function MyPage() {
         </div>
       )}
     </section>
+  );
+}
+
+export default function MyPage() {
+  return (
+    <Suspense fallback={
+      <div className="space-y-4">
+        <div className="h-8 w-40 animate-pulse rounded-lg bg-slate-200" />
+        <div className="h-24 w-full animate-pulse rounded-xl bg-slate-200" />
+      </div>
+    }>
+      <MyPageContent />
+    </Suspense>
   );
 }

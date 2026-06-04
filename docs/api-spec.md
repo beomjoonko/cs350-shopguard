@@ -12,7 +12,8 @@ All paths are prefixed with `/api/v1`.
 |---|---|---|---|
 | POST | `/auth/register` | — | `{ email, password }` |
 | POST | `/auth/login` | — | `{ email, password }` → `{ access_token }` |
-| POST | `/auth/password-reset/request` | — | `{ email }` |
+| POST | `/auth/password-reset/request` | — | `{ email }` → 202 (always same message) |
+| POST | `/auth/password-reset/confirm` | — | `{ token, new_password }` → 204 |
 
 Login enforces SRS §4.1 REQ-3 (5 failed attempts → 30-minute lockout).
 
@@ -28,7 +29,8 @@ Login enforces SRS §4.1 REQ-3 (5 failed attempts → 30-minute lockout).
 
 | Method | Path | Body / Notes |
 |---|---|---|
-| POST | `/reports` | `{ url, fraud_type, description, evidence_image_url?, legal_consent }` — REQ-3 enforced |
+| POST | `/reports` | multipart: `url`, `fraud_type`, `description`, `legal_consent`, optional `evidence` file |
+| GET | `/reports/{id}/evidence` | stored image (reporter or admin) |
 | GET  | `/reports/{id}` | own only, unless admin |
 
 ## Analysis — `/analysis`  (auth required)

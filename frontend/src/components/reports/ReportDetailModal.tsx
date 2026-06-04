@@ -2,6 +2,7 @@
 
 import type { Report } from "@/types";
 import { FRAUD_LABEL, RISK_BADGE, statusBadge } from "@/lib/reportLabels";
+import { ReportEvidenceImage } from "@/components/reports/ReportEvidenceImage";
 
 type Props = {
   report: Report;
@@ -102,18 +103,22 @@ export function ReportDetailModal({ report, onClose, showReporterId }: Props) {
             <dd className="mt-1 whitespace-pre-wrap text-slate-700">{report.description}</dd>
           </div>
 
-          {report.evidence_image_url && (
+          {(report.has_evidence || report.evidence_image_url) && (
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Evidence</dt>
-              <dd className="mt-1">
-                <a
-                  href={report.evidence_image_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  View evidence image
-                </a>
+              <dd className="mt-2">
+                {report.has_evidence ? (
+                  <ReportEvidenceImage reportId={report.id} />
+                ) : report.evidence_image_url ? (
+                  <a
+                    href={report.evidence_image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    View evidence image
+                  </a>
+                ) : null}
               </dd>
             </div>
           )}

@@ -42,6 +42,7 @@ def verify_password(plain_password: str, hashed: str) -> bool:
 def create_access_token(
     subject: str | int,
     role: str,
+    token_version: int = 0,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Issue a JWT access token. `subject` is the user id."""
@@ -52,6 +53,7 @@ def create_access_token(
     payload = {
         "sub": str(subject),
         "role": role,
+        "tv": token_version,
         "exp": expire,
         "type": "access",
     }

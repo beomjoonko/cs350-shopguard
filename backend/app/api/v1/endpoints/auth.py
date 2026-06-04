@@ -21,12 +21,15 @@ from app.core.security import (
 from app.models.blacklist import Blacklist
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.user import (
+    PasswordResetConfirm,
     PasswordResetRequest,
+    PasswordResetResponse,
     TokenResponse,
     UserLogin,
     UserPublic,
     UserRegister,
 )
+from app.services.password_reset import confirm_password_reset, request_password_reset
 
 router = APIRouter()
 
@@ -96,16 +99,21 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     user.locked_until = None
     db.commit()
 
-    token = create_access_token(subject=user.id, role=user.role.value)
+    token = create_access_token(
+        subject=user.id,
+        role=user.role.value,
+        token_version=user.token_version,
+    )
     return TokenResponse(access_token=token)
 
 
-@router.post("/password-reset/request", status_code=202)
-def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
-    """
-    SRS §4.1 REQ-2 — send reset email.
+@router.post("/password-reset/request", status_code=202, response_model=PasswordResetResponse)
+def password_reset_request(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    """SRS §4.1 REQ-2 — email a one-time reset link (same response if unknown email)."""
+    return request_password_reset(db, payload.email)
 
-    Always returns 202 to avoid leaking which emails are registered.
-    TODO: enqueue an email job via SMTP (SRS §3.4) with a signed reset token.
-    """
-    return {"detail": "If the address exists, a reset link has been sent."}
+
+@router.post("/password-reset/confirm", status_code=204)
+def password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """SRS §4.1 REQ-2 — set new password from email link token."""
+    confirm_password_reset(db, payload.token, payload.new_password)

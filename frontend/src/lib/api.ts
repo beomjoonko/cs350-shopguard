@@ -26,7 +26,9 @@ function normalizeDetail(detail: unknown): string | null {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  if (!(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -36,6 +38,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 401) {
     clearToken();
     throw new Error("Unauthorized");
+  }
+  if (res.status === 403) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = normalizeDetail(body.detail) ?? detail;
+    } catch { /* noop */ }
+    if (detail.toLowerCase().includes("suspended")) {
+      clearToken();
+    }
+    throw new Error(detail);
   }
   if (!res.ok) {
     let detail = res.statusText;
@@ -60,6 +73,18 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  requestPasswordReset: (email: string) =>
+    request<{ detail: string }>("/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    request<void>("/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
+
   me: () => request<User>("/users/me"),
   myReports: () => request<Report[]>("/users/me/reports"),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -68,13 +93,48 @@ export const api = {
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     }),
 
-  createReport: (data: {
-    url: string;
-    fraud_type: FraudType;
-    description: string;
-    evidence_image_url?: string;
-    legal_consent: boolean;
-  }) => request<Report>("/reports", { method: "POST", body: JSON.stringify(data) }),
+  createReport: (
+    data: {
+      url: string;
+      fraud_type: FraudType;
+      description: string;
+      legal_consent: boolean;
+    },
+    evidenceFile?: File
+  ) => {
+    const form = new FormData();
+    const normalizedUrl = data.url.trim().match(/^https?:\/\//i)
+      ? data.url.trim()
+      : `https://${data.url.trim()}`;
+    form.append("url", normalizedUrl);
+    form.append("fraud_type", data.fraud_type);
+    form.append("description", data.description.trim());
+    form.append("legal_consent", data.legal_consent ? "true" : "false");
+    if (evidenceFile && evidenceFile.size > 0) {
+      form.append("evidence", evidenceFile, evidenceFile.name);
+    }
+    return request<Report>("/reports", { method: "POST", body: form });
+  },
+
+  fetchReportEvidence: async (reportId: string): Promise<Blob> => {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${BASE_URL}/reports/${reportId}/evidence`, { headers });
+    if (res.status === 401) {
+      clearToken();
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = await res.json();
+        detail = normalizeDetail(body.detail) ?? detail;
+      } catch { /* noop */ }
+      throw new Error(detail);
+    }
+    return res.blob();
+  },
 
   searchUrl: (url: string) =>
     request<UrlAnalysisResult>("/analysis/search", { method: "POST", body: JSON.stringify({ url }) }),

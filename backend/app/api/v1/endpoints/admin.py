@@ -6,7 +6,7 @@ Admin endpoints — SRS §4.4.
   POST  /admin/users/{user_id}/block     suspend user + revoke sessions (REQ-4..6)
 """
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.dependencies import require_admin
@@ -67,6 +67,7 @@ def list_reports(
     """SRS §4.4 REQ-2 — admins see all reports."""
     rows = (
         db.query(Report, Url)
+        .options(joinedload(Report.evidence))
         .join(Url, Report.url_id == Url.id)
         .order_by(Report.created_at.desc())
         .all()
@@ -97,7 +98,12 @@ def update_report_status(
     ))
     url_row = db.query(Url).filter(Url.id == report.url_id).first()
     db.commit()
-    db.refresh(report)
+    report = (
+        db.query(Report)
+        .options(joinedload(Report.evidence))
+        .filter(Report.id == report_id)
+        .first()
+    )
     _enqueue_reanalysis_if_needed(db, url_row, old_status, report.status)
     return report_to_public(report, url_row)
 
@@ -115,8 +121,6 @@ def block_user(
       - add email to BLACKLIST → registration is blocked
       - write audit log
 
-    NOTE: real session revocation would also push the JTI to a Redis denylist
-          checked by `decode_token`. Marked as TODO for now.
     """
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
@@ -126,6 +130,7 @@ def block_user(
 
     target.status = UserStatus.SUSPENDED
     target.locked_until = None
+    target.token_version = (target.token_version or 0) + 1
 
     if not db.query(Blacklist).filter(Blacklist.email == target.email).first():
         db.add(Blacklist(email=target.email, reason=payload.reason))
@@ -137,4 +142,3 @@ def block_user(
         reason=payload.reason,
     ))
     db.commit()
-    # TODO: invalidate any active JWTs by adding their jti to a Redis denylist

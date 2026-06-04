@@ -5,6 +5,7 @@ from app.schemas.report import ReportPublic
 
 
 def report_to_public(report: Report, url_row: Url | None = None) -> ReportPublic:
+    has_evidence = report.evidence is not None
     return ReportPublic(
         id=report.id,
         user_id=report.user_id,
@@ -12,6 +13,7 @@ def report_to_public(report: Report, url_row: Url | None = None) -> ReportPublic
         fraud_type=report.fraud_type,
         description=report.description,
         evidence_image_url=report.evidence_image_url,
+        has_evidence=has_evidence,
         status=report.status,
         created_at=report.created_at,
         url=url_row.normalized_url if url_row else None,

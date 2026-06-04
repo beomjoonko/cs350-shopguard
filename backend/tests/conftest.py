@@ -4,11 +4,32 @@ All test files share this conftest. The `reset_db` fixture is autouse so
 every test gets a clean schema. Use the `client` fixture to make HTTP
 requests and the `db` fixture to set up data directly.
 """
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
+
+
+def _ensure_test_cors_origins() -> None:
+    """TC-64 (SEC-2): local .env often has HTTP-only; append HTTPS for pytest."""
+    raw = os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:3000,https://localhost:3000",
+    )
+    origins = [o.strip() for o in raw.split(",") if o.strip()]
+    if not any(o.startswith("https://") for o in origins):
+        origins.append("https://localhost:3000")
+        os.environ["CORS_ALLOWED_ORIGINS"] = ",".join(origins)
+
+
+_ensure_test_cors_origins()
+
+from app.config import get_settings
+
+get_settings.cache_clear()
 
 from app.main import app
 from app.core.database import Base, get_db
@@ -74,7 +95,7 @@ def client(reset_db):  # noqa: F811
 
 @pytest.fixture
 def regular_user(db):
-    return make_user(db, "user@example.com", "password123")
+    return make_user(db, "user@example.com", "Passw0rd!")
 
 
 @pytest.fixture

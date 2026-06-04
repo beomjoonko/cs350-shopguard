@@ -11,7 +11,6 @@ class ReportCreate(BaseModel):
     url: HttpUrl
     fraud_type: FraudType
     description: str = Field(min_length=20)  # see "Please enter at least 20 characters" in SRS UI
-    evidence_image_url: str | None = None
     legal_consent: bool = Field(..., description="Required — SRS §4.2 REQ-3")
 
 
@@ -22,6 +21,7 @@ class ReportPublic(BaseModel):
     fraud_type: FraudType
     description: str
     evidence_image_url: str | None
+    has_evidence: bool = False
     status: ReportStatus
     created_at: datetime
     url: str | None = None

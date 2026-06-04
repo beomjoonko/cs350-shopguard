@@ -2,7 +2,7 @@
 USERS table — SRS Appendix B Figure B.3.
 
 Columns: id, email, password_hash, role, status, failed_login_attempts,
-         created_at, updated_at
+         token_version, created_at, updated_at
 """
 import enum
 import uuid
@@ -35,6 +35,7 @@ class User(Base):
     status = Column(Enum(UserStatus), nullable=False, default=UserStatus.ACTIVE)
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)  # supports SRS §4.1 REQ-3
+    token_version = Column(Integer, nullable=False, default=0)  # SRS §4.4 REQ-4
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, nullable=False,
