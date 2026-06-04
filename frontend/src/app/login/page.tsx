@@ -20,6 +20,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const resetSuccess = searchParams.get("reset") === "1";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,6 +50,12 @@ function LoginForm() {
           <p className="mt-1 text-sm text-slate-500">Welcome back</p>
         </div>
 
+        {resetSuccess && (
+          <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+            Password updated. Sign in with your new password.
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700">Email</label>
@@ -71,6 +78,14 @@ function LoginForm() {
               placeholder="••••••••"
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
+            <p className="mt-2 text-right">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </p>
           </div>
 
           {error && (

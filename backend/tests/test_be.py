@@ -32,12 +32,16 @@ from app.models.analysis_job import AnalysisJob, JobStatus
 from app.models.blacklist import Blacklist
 from app.models.report import Report, ReportStatus, FraudType
 from app.models.url import Url, RiskLevel
+from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User, UserStatus, UserRole
+from app.utils.reset_token import hash_reset_token
 from app.utils.url_normalizer import normalize_url
 
 # ── Endpoint paths ──────────────────────────────────────────────────────────
 REGISTER = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
+RESET_REQUEST = "/api/v1/auth/password-reset/request"
+RESET_CONFIRM = "/api/v1/auth/password-reset/confirm"
 PASSWORD = "/api/v1/users/me/password"
 SEARCH = "/api/v1/analysis/search"
 JOBS = "/api/v1/analysis/jobs"
@@ -79,7 +83,7 @@ def _seed_report(db, user, url_str, fraud_type=FraudType.NON_DELIVERY, descripti
 # ════════════════════════════════════════════════════════════════════════════
 # TC-01 – TC-05: User Registration (POST /auth/register)
 # ════════════════════════════════════════════════════════════════════════════
-def _register_payload(email="new@example.com", password="securepass"):
+def _register_payload(email="new@example.com", password="Secure1!pass"):
     return {"email": email, "password": password}
 
 
@@ -108,10 +112,84 @@ def test_tc03_password_too_short(client):
     assert res.status_code == 422
 
 
+# TC-03b — password missing number or special character (SRS §4.3 REQ-6)
+def test_tc03b_password_missing_complexity(client):
+    res = client.post(REGISTER, json=_register_payload(password="12345678"))
+    assert res.status_code == 422
+    res2 = client.post(REGISTER, json=_register_payload(email="no-special@example.com", password="Abcdefg1"))
+    assert res2.status_code == 422
+
+
 # TC-04 — invalid email format (Pydantic 422)
 def test_tc04_invalid_email_format(client):
-    res = client.post(REGISTER, json={"email": "not-an-email", "password": "securepass"})
+    res = client.post(REGISTER, json={"email": "not-an-email", "password": "Secure1!pass"})
     assert res.status_code == 422
+
+
+# ── Password reset (SRS §4.1 REQ-2) ─────────────────────────────────────────
+
+def _token_from_reset_url(url: str) -> str:
+    from urllib.parse import parse_qs, urlparse
+    return parse_qs(urlparse(url).query)["token"][0]
+
+
+@patch("app.services.password_reset.send_password_reset_email")
+def test_password_reset_request_unknown_email(mock_send, client):
+    res = client.post(RESET_REQUEST, json={"email": "nobody@example.com"})
+    assert res.status_code == 202
+    mock_send.assert_not_called()
+
+
+@patch("app.services.password_reset.send_password_reset_email")
+def test_password_reset_flow(mock_send, client, regular_user):
+    res = client.post(RESET_REQUEST, json={"email": "user@example.com"})
+    assert res.status_code == 202
+    mock_send.assert_called_once()
+    raw_token = _token_from_reset_url(mock_send.call_args[0][1])
+
+    old_token = get_token(regular_user)
+    confirm = client.post(
+        RESET_CONFIRM,
+        json={"token": raw_token, "new_password": "Reset1!pass"},
+    )
+    assert confirm.status_code == 204
+
+    login = client.post(LOGIN, json={"email": "user@example.com", "password": "Reset1!pass"})
+    assert login.status_code == 200
+
+    me_old = client.get(ME, headers={"Authorization": f"Bearer {old_token}"})
+    assert me_old.status_code == 401
+
+    reuse = client.post(
+        RESET_CONFIRM,
+        json={"token": raw_token, "new_password": "Another1!x"},
+    )
+    assert reuse.status_code == 400
+
+
+def test_password_reset_confirm_invalid_token(client):
+    res = client.post(
+        RESET_CONFIRM,
+        json={"token": "not-a-valid-stored-token-xyz", "new_password": "Reset1!pass"},
+    )
+    assert res.status_code == 400
+
+
+@patch("app.services.password_reset.send_password_reset_email")
+def test_password_reset_expired_token(mock_send, client, db, regular_user):
+    client.post(RESET_REQUEST, json={"email": "user@example.com"})
+    raw_token = _token_from_reset_url(mock_send.call_args[0][1])
+    row = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token_hash == hash_reset_token(raw_token)
+    ).first()
+    row.expires_at = datetime.utcnow() - timedelta(minutes=1)
+    db.commit()
+
+    res = client.post(
+        RESET_CONFIRM,
+        json={"token": raw_token, "new_password": "Reset1!pass"},
+    )
+    assert res.status_code == 400
 
 
 # TC-05 — blacklisted email
@@ -127,7 +205,7 @@ def test_tc05_blacklisted_email(client, db):
 # ════════════════════════════════════════════════════════════════════════════
 # TC-06 – TC-12: Login (POST /auth/login)
 # ════════════════════════════════════════════════════════════════════════════
-def _creds(email="user@example.com", password="password123"):
+def _creds(email="user@example.com", password="Passw0rd!"):
     return {"email": email, "password": password}
 
 
@@ -223,7 +301,7 @@ def test_tc09b_db_error_during_lockout_commit(client, db):
     from sqlalchemy.exc import OperationalError as SAError
     from sqlalchemy.orm import Session as SASession
 
-    EMAIL, PW = "dberror@example.com", "password123"
+    EMAIL, PW = "dberror@example.com", "Passw0rd!"
     make_user(db, EMAIL, PW)
 
     # 4번 실패 → failed_login_attempts = 4 (정상 커밋)
@@ -283,7 +361,7 @@ def test_tc09c_email_variants_lockout_bypass(client, db):
 
     우회 가능 변형(BYPASS)은 잠금 카운터에 포함되지 않아 브루트포스 방어가 무력화될 수 있음.
     """
-    EMAIL, PW = "user@example.com", "password123"
+    EMAIL, PW = "user@example.com", "Passw0rd!"
     make_user(db, EMAIL, PW)
 
     # 4번 정상 실패 → counter = 4
@@ -358,12 +436,12 @@ def test_tc09d_lockout_parametrized(client, db, monkeypatch, max_attempts, locko
     monkeypatch.setattr(settings, "MAX_LOGIN_ATTEMPTS", max_attempts)
     monkeypatch.setattr(settings, "LOGIN_LOCKOUT_MINUTES", lockout_minutes)
 
-    make_user(db, "param@example.com", "password123")
+    make_user(db, "param@example.com", "Passw0rd!")
 
     # max_attempts - 1번 실패 → 아직 잠금 아님, 올바른 비밀번호로 로그인 가능
     for _ in range(max_attempts - 1):
         client.post(LOGIN, json={"email": "param@example.com", "password": "wrong"})
-    res_ok = client.post(LOGIN, json={"email": "param@example.com", "password": "password123"})
+    res_ok = client.post(LOGIN, json={"email": "param@example.com", "password": "Passw0rd!"})
     assert res_ok.status_code == 200, (
         f"[attempts={max_attempts}] {max_attempts-1}번 실패 후 정상 로그인이 막힘"
     )
@@ -371,7 +449,7 @@ def test_tc09d_lockout_parametrized(client, db, monkeypatch, max_attempts, locko
     # 성공 로그인으로 카운터 리셋 → 다시 max_attempts번 실패 → 잠금
     for _ in range(max_attempts):
         client.post(LOGIN, json={"email": "param@example.com", "password": "wrong"})
-    res_locked = client.post(LOGIN, json={"email": "param@example.com", "password": "password123"})
+    res_locked = client.post(LOGIN, json={"email": "param@example.com", "password": "Passw0rd!"})
     assert res_locked.status_code == 423, (
         f"[attempts={max_attempts}] {max_attempts}번 실패 후 423이 아님"
     )
@@ -418,7 +496,7 @@ def test_tc11_login_after_lockout_expires(client, db, regular_user):
 
 # TC-12 — suspended account login
 def test_tc12_suspended_account(client, db):
-    make_user(db, "suspended@example.com", "password123", status=UserStatus.SUSPENDED)
+    make_user(db, "suspended@example.com", "Passw0rd!", status=UserStatus.SUSPENDED)
     res = client.post(LOGIN, json=_creds(email="suspended@example.com"))
     assert res.status_code == 403
     assert "suspended" in res.json()["detail"].lower()
@@ -433,25 +511,25 @@ def _change_password(current, new):
 
 # TC-13 — successful password change; new password works on next login
 def test_tc13_successful_password_change(client, regular_user, auth_headers):
-    res = client.post(PASSWORD, json=_change_password("password123", "newpass456"), headers=auth_headers)
+    res = client.post(PASSWORD, json=_change_password("Passw0rd!", "Newpass1!"), headers=auth_headers)
     assert res.status_code == 204
 
     # Verify the new password works
-    login_res = client.post(LOGIN, json={"email": "user@example.com", "password": "newpass456"})
+    login_res = client.post(LOGIN, json={"email": "user@example.com", "password": "Newpass1!"})
     assert login_res.status_code == 200
     assert "access_token" in login_res.json()
 
 
 # TC-14 — wrong current password
 def test_tc14_wrong_current_password(client, auth_headers):
-    res = client.post(PASSWORD, json=_change_password("wrongcurrent", "newpass456"), headers=auth_headers)
+    res = client.post(PASSWORD, json=_change_password("wrongcurrent", "Newpass1!"), headers=auth_headers)
     assert res.status_code == 401
     assert "current password is incorrect" in res.json()["detail"].lower()
 
 
 # TC-15 — new password same as current (SRS §4.3 REQ-5)
 def test_tc15_new_password_same_as_current(client, auth_headers):
-    res = client.post(PASSWORD, json=_change_password("password123", "password123"), headers=auth_headers)
+    res = client.post(PASSWORD, json=_change_password("Passw0rd!", "Passw0rd!"), headers=auth_headers)
     assert res.status_code == 400
     assert "differ" in res.json()["detail"].lower()
 
@@ -556,18 +634,26 @@ _REPORT_FRAUD_TYPE = "NON_DELIVERY"
 _REPORT_DESCRIPTION = "This shop took my money and never delivered the product."
 
 
-def _report_payload(url=_REPORT_URL, description=_REPORT_DESCRIPTION, legal_consent=True):
+def _report_form(url=_REPORT_URL, description=_REPORT_DESCRIPTION, legal_consent=True):
     return {
         "url": url,
         "fraud_type": _REPORT_FRAUD_TYPE,
         "description": description,
-        "legal_consent": legal_consent,
+        "legal_consent": "true" if legal_consent else "false",
     }
+
+
+# Minimal 1×1 PNG for evidence upload tests
+_PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 # TC-23 — successful report submission
 def test_tc23_successful_report(client, auth_headers):
-    res = client.post(REPORTS, json=_report_payload(), headers=auth_headers)
+    res = client.post(REPORTS, data=_report_form(), headers=auth_headers)
     assert res.status_code == 201
     body = res.json()
     assert body["fraud_type"] == _REPORT_FRAUD_TYPE
@@ -577,29 +663,56 @@ def test_tc23_successful_report(client, auth_headers):
 
 # TC-24 — legal_consent=false → 400
 def test_tc24_report_without_legal_consent(client, auth_headers):
-    res = client.post(REPORTS, json=_report_payload(legal_consent=False), headers=auth_headers)
+    res = client.post(REPORTS, data=_report_form(legal_consent=False), headers=auth_headers)
     assert res.status_code == 400
     assert "legal consent" in res.json()["detail"].lower()
 
 
 # TC-25 — description too short (< 20 chars) → 422
 def test_tc25_description_too_short(client, auth_headers):
-    res = client.post(REPORTS, json=_report_payload(description="Too short"), headers=auth_headers)
+    res = client.post(REPORTS, data=_report_form(description="Too short"), headers=auth_headers)
     assert res.status_code == 422
 
 
 # TC-26 — duplicate report from the same user for the same URL → 409
 def test_tc26_duplicate_report(client, auth_headers):
-    client.post(REPORTS, json=_report_payload(), headers=auth_headers)
-    res = client.post(REPORTS, json=_report_payload(), headers=auth_headers)
+    client.post(REPORTS, data=_report_form(), headers=auth_headers)
+    res = client.post(REPORTS, data=_report_form(), headers=auth_headers)
     assert res.status_code == 409
     assert "already reported" in res.json()["detail"].lower()
 
 
 # TC-27 — report without login → 401
 def test_tc27_report_without_login(client):
-    res = client.post(REPORTS, json=_report_payload())
+    res = client.post(REPORTS, data=_report_form())
     assert res.status_code == 401
+
+
+def test_report_with_evidence_image(client, auth_headers):
+    files = {"evidence": ("proof.png", _PNG_1X1, "image/png")}
+    res = client.post(REPORTS, data=_report_form(), files=files, headers=auth_headers)
+    assert res.status_code == 201
+    body = res.json()
+    assert body["has_evidence"] is True
+    ev = client.get(f"{REPORTS}/{body['id']}/evidence", headers=auth_headers)
+    assert ev.status_code == 200
+    assert ev.headers["content-type"] == "image/png"
+    assert ev.content == _PNG_1X1
+
+
+def test_report_evidence_non_ascii_filename(client, auth_headers):
+    """Korean filenames must not crash Content-Disposition (latin-1 headers)."""
+    files = {"evidence": ("스크린샷.png", _PNG_1X1, "image/png")}
+    res = client.post(
+        REPORTS,
+        data=_report_form(url="https://evidence-filename.example.com"),
+        files=files,
+        headers=auth_headers,
+    )
+    assert res.status_code == 201
+    ev = client.get(f"{REPORTS}/{res.json()['id']}/evidence", headers=auth_headers)
+    assert ev.status_code == 200
+    assert ev.content == _PNG_1X1
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -694,9 +807,24 @@ def test_tc34_block_user(client, db, admin_user, admin_headers, regular_user):
     db.expire_all()
     target = db.query(User).filter(User.id == regular_user.id).first()
     assert target.status == UserStatus.SUSPENDED
+    assert target.token_version == 1
 
     bl = db.query(Blacklist).filter(Blacklist.email == regular_user.email).first()
     assert bl is not None
+
+
+# TC-34b — block invalidates pre-block JWT via token_version (SRS §4.4 REQ-4)
+def test_tc34b_block_invalidates_existing_jwt(client, admin_headers, regular_user):
+    token = get_token(regular_user)
+    res = client.post(
+        ADMIN_BLOCK.format(user_id=regular_user.id),
+        json={"reason": "abuse"},
+        headers=admin_headers,
+    )
+    assert res.status_code == 204
+
+    me = client.get(ME, headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 401
 
 
 # TC-35 — admin cannot block themselves → 400
@@ -754,7 +882,7 @@ def test_tc37_recovery_after_rate_limit(client):
 # ════════════════════════════════════════════════════════════════════════════
 # TC-38 — password of exactly 8 chars (boundary) → 201
 def test_tc38_password_exactly_min_length(client):
-    res = client.post(REGISTER, json={"email": "boundary8@example.com", "password": "12345678"})
+    res = client.post(REGISTER, json={"email": "boundary8@example.com", "password": "Abcd1!xy"})
     assert res.status_code == 201
 
 
@@ -803,13 +931,13 @@ def test_tc42_suspended_user_token_revoked(client, db, regular_user):
 
 # TC-43 — password change without authentication → 401
 def test_tc43_password_change_without_auth(client):
-    res = client.post(PASSWORD, json=_change_password("password123", "newpass456"))
+    res = client.post(PASSWORD, json=_change_password("Passw0rd!", "Newpass1!"))
     assert res.status_code == 401
 
 
 # TC-44 — new password shorter than 8 chars → 422
 def test_tc44_new_password_too_short(client, auth_headers):
-    res = client.post(PASSWORD, json=_change_password("password123", "short"), headers=auth_headers)
+    res = client.post(PASSWORD, json=_change_password("Passw0rd!", "short"), headers=auth_headers)
     assert res.status_code == 422
 
 
@@ -860,15 +988,15 @@ def test_tc46_completed_job_exposes_risk_level(client, db, auth_headers):
 
 # TC-47 — description of exactly 20 chars (boundary) → 201
 def test_tc47_description_exactly_min_length(client, auth_headers):
-    res = client.post(REPORTS, json=_report_payload(description="A" * 20), headers=auth_headers)
+    res = client.post(REPORTS, data=_report_form(description="A" * 20), headers=auth_headers)
     assert res.status_code == 201
 
 
 # TC-48 — invalid fraud_type enum → 422
 def test_tc48_invalid_fraud_type(client, auth_headers):
-    payload = _report_payload()
-    payload["fraud_type"] = "NOT_A_REAL_TYPE"
-    res = client.post(REPORTS, json=payload, headers=auth_headers)
+    form = _report_form()
+    form["fraud_type"] = "NOT_A_REAL_TYPE"
+    res = client.post(REPORTS, data=form, headers=auth_headers)
     assert res.status_code == 422
 
 

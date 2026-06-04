@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { passwordComplexityError, PASSWORD_COMPLEXITY_HINT } from "@/lib/passwordPolicy";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,6 +15,11 @@ export default function RegisterPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const pwError = passwordComplexityError(password);
+    if (pwError) {
+      setError(pwError);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -62,6 +68,7 @@ export default function RegisterPage() {
               placeholder="Min. 8 chars with numbers and special chars"
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
+            <p className="mt-1 text-xs text-slate-500">{PASSWORD_COMPLEXITY_HINT}</p>
           </div>
 
           {error && (

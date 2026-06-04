@@ -49,8 +49,20 @@ class Settings(BaseSettings):
     # ─── Password policy (SRS §4.3 REQ-6) ───────────────────
     PASSWORD_MIN_LENGTH: int = 8
 
+    # ─── Password reset email (SRS §4.1 REQ-2, §3.4) ────────
+    FRONTEND_URL: str = "http://localhost:3000"
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@shopguard.local"
+
     # ─── CORS ───────────────────────────────────────────────
-    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000"
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,https://localhost:3000"
+
+    # ─── Report evidence uploads (SRS §4.2) ─────────────────
+    EVIDENCE_MAX_BYTES: int = 5 * 1024 * 1024  # 5 MB
 
     # ─── Object storage ─────────────────────────────────────
     S3_ENDPOINT: str | None = None

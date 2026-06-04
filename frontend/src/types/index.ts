@@ -29,6 +29,7 @@ export interface Report {
   fraud_type: FraudType;
   description: string;
   evidence_image_url: string | null;
+  has_evidence?: boolean;
   status: ReportStatus;
   created_at: string;
   url?: string | null;

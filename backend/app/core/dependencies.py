@@ -36,8 +36,14 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
-    # Suspended users cannot use the API even with an old token.
-    # SRS §4.4 REQ-4: blocking a user invalidates active sessions.
+    # SRS §4.4 REQ-4: stale JWTs after block (token_version bump) are rejected.
+    token_tv = payload.get("tv")
+    try:
+        if token_tv is None or int(token_tv) != user.token_version:
+            raise credentials_exception
+    except (TypeError, ValueError):
+        raise credentials_exception
+
     if user.status == UserStatus.SUSPENDED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

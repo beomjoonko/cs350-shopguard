@@ -10,6 +10,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -51,4 +52,11 @@ class Report(Base):
     updated_at = Column(
         DateTime, nullable=False,
         default=datetime.utcnow, onupdate=datetime.utcnow,
+    )
+
+    evidence = relationship(
+        "ReportEvidence",
+        back_populates="report",
+        uselist=False,
+        lazy="select",
     )

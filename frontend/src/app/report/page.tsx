@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useLayoutEffect, useState } from "react";
+import { Suspense, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -15,15 +15,20 @@ const FRAUD_TYPES: { value: FraudType; label: string }[] = [
   { value: "OTHERS",                label: "Others" },
 ];
 
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_BYTES = 5 * 1024 * 1024;
+
 function ReportForm() {
   const params = useSearchParams();
   const router = useRouter();
   const queryString = params.toString();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [url, setUrl] = useState(params.get("url") ?? "");
   const [fraudType, setFraudType] = useState<FraudType>("NON_DELIVERY");
   const [description, setDescription] = useState("");
-  const [evidenceImageUrl, setEvidenceImageUrl] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -39,8 +44,49 @@ function ReportForm() {
     setAuthReady(true);
   }, [queryString, router]);
 
+  useLayoutEffect(() => {
+    if (!evidenceFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(evidenceFile);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [evidenceFile]);
+
   const descOk = description.trim().length >= 20;
   const canSubmit = authReady && consent && url.trim() !== "" && descOk && !submitting;
+
+  function setFile(file: File | null) {
+    if (!file) {
+      setEvidenceFile(null);
+      return;
+    }
+    const type = file.type.split(";")[0].trim().toLowerCase();
+    if (!ACCEPTED_TYPES.includes(type)) {
+      setError("Evidence must be JPEG, PNG, WebP, or GIF.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError("Evidence image must be at most 5MB.");
+      return;
+    }
+    setError(null);
+    setEvidenceFile(file);
+  }
+
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setFile(file);
+    e.target.value = "";
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) setFile(file);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,26 +94,22 @@ function ReportForm() {
     setSubmitting(true);
     setError(null);
     try {
-      await api.createReport({
-        url,
-        fraud_type: fraudType,
-        description,
-        evidence_image_url: evidenceImageUrl || undefined,
-        legal_consent: consent,
-      });
-      router.push("/my-page");
-    } catch (e) {
-      setError(String(e));
+      await api.createReport(
+        {
+          url,
+          fraud_type: fraudType,
+          description,
+          legal_consent: consent,
+        },
+        evidenceFile ?? undefined
+      );
+      router.push("/my-page?reportSubmitted=1");
+    } catch (err) {
+      const msg = String(err);
+      setError(msg.startsWith("Error: ") ? msg.slice(7) : msg);
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    const text = e.dataTransfer.getData("text/plain");
-    if (text) setEvidenceImageUrl(text);
   }
 
   if (!authReady) {
@@ -87,7 +129,6 @@ function ReportForm() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-5">
-        {/* URL */}
         <div>
           <label className="block text-sm font-medium text-slate-700">
             URL <span className="text-red-500">*</span>
@@ -102,7 +143,6 @@ function ReportForm() {
           />
         </div>
 
-        {/* Fraud Type */}
         <div>
           <label className="block text-sm font-medium text-slate-700">
             Fraud Type <span className="text-red-500">*</span>
@@ -118,7 +158,6 @@ function ReportForm() {
           </select>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-slate-700">
             Description <span className="text-red-500">*</span>
@@ -140,39 +179,63 @@ function ReportForm() {
           </div>
         </div>
 
-        {/* Evidence upload */}
         <div>
           <label className="block text-sm font-medium text-slate-700">
             Evidence <span className="text-xs font-normal text-slate-400">(Optional)</span>
           </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_TYPES.join(",")}
+            className="hidden"
+            onChange={onFileInput}
+          />
           <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            className={`mt-1.5 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors ${
+            className={`mt-1.5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors ${
               dragging
                 ? "border-blue-400 bg-blue-50"
                 : "border-slate-300 bg-slate-50 hover:bg-slate-100"
             }`}
           >
-            <svg className="h-8 w-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <p className="mt-2 text-sm text-slate-500">Click to upload image</p>
-            <p className="text-xs text-slate-400">PNG, JPG (max 5MB)</p>
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="Evidence preview"
+                className="max-h-48 rounded-lg object-contain"
+              />
+            ) : (
+              <>
+                <svg className="h-8 w-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <p className="mt-2 text-sm text-slate-500">Click or drag to upload image</p>
+                <p className="text-xs text-slate-400">PNG, JPG, WebP, GIF (max 5MB)</p>
+              </>
+            )}
           </div>
-          <input
-            type="url"
-            value={evidenceImageUrl}
-            onChange={(e) => setEvidenceImageUrl(e.target.value)}
-            placeholder="Or paste image URL here"
-            className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
+          {evidenceFile && (
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+              <span>{evidenceFile.name}</span>
+              <button
+                type="button"
+                onClick={() => setEvidenceFile(null)}
+                className="font-medium text-red-600 hover:underline"
+              >
+                Remove
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Legal warning */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <div className="flex gap-2">
             <svg className="mt-0.5 h-4 w-4 shrink-0 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -202,7 +265,6 @@ function ReportForm() {
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex justify-end gap-3 pt-1">
           <button
             type="button"

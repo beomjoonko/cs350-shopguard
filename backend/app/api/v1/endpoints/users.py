@@ -6,7 +6,7 @@ User Page endpoints — SRS §4.3.
   POST /users/me/password   change password (REQ-5, REQ-6)
 """
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -34,6 +34,7 @@ def my_reports(
     """SRS §4.3 REQ-1, REQ-4 (access control: own reports only)."""
     rows = (
         db.query(Report, Url)
+        .options(joinedload(Report.evidence))
         .join(Url, Report.url_id == Url.id)
         .filter(Report.user_id == current_user.id)
         .order_by(Report.created_at.desc())
