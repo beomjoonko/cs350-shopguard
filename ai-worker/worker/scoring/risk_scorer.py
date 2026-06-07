@@ -9,6 +9,20 @@ Levels (REQ-5):
   Danger   61–80
   Critical 81–100
 
+Stateless by design: each run recomputes the score from scratch. The only
+cumulative input is report_count (a fresh DB COUNT of active/verified
+reports); the previous final_risk_score is NOT fed back in — we overwrite
+urls.current_risk_score each run rather than smoothing against history.
+
+This is deliberate to prevent a score-dilution (bust-out) attack: an
+attacker could keep a page benign and pre-seed it so it accumulates a
+history of low/safe scores, then flip it to a fraud page. If past scores
+were blended into the current one, that accumulated "safe" history would
+drag the score down and even fresh reports might not push it out of the
+SAFE band fast enough. By scoring purely from the *current* crawl, URL,
+and report count, a page that turns malicious is judged on what it is now,
+not on the clean reputation it banked earlier.
+
 TBD-1 (Appendix C) will replace this placeholder formula with a calibrated one.
 """
 from __future__ import annotations
