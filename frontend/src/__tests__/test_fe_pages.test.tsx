@@ -79,14 +79,14 @@ describe("Admin status filter (BUG-2)", () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// FT-26 — Hardcoded AI confidence literal (BUG-4)
+// FT-26 — Hardcoded AI confidence literal removed (BUG-4 fixed)
 // ════════════════════════════════════════════════════════════════════════════
 describe("Search card hardcoded confidence (BUG-4)", () => {
-  // FT-26
-  it("search page source still contains the hardcoded 82% literal", () => {
+  // FT-26 — the fake "AI Confidence: 82%" stat was removed; guard against regressions
+  it("search page no longer shows the hardcoded 82% confidence", () => {
     const src = readFileSync(resolve(__dirname, "../app/search/page.tsx"), "utf-8");
-    expect(src).toMatch(/82%/);
-    // When real confidence is wired up, remove the literal and flip this test.
+    expect(src).not.toMatch(/82%/);
+    expect(src).not.toMatch(/AI Confidence/);
   });
 });
 

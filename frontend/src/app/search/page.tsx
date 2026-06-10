@@ -184,20 +184,6 @@ function SearchResults() {
       )}
 
       <section className="space-y-4">
-        {/* URL search bar */}
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-          <svg className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <span className="flex-1 truncate font-mono text-sm text-slate-700">{result.url}</span>
-          <button
-            onClick={() => router.push("/")}
-            className="shrink-0 rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-          >
-            Search
-          </button>
-        </div>
-
         {/* Risk card */}
         {isAnalyzing ? (
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -258,13 +244,6 @@ function SearchResults() {
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
                 Reports: <strong className="text-slate-800">{result.report_count}</strong>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                AI Confidence: <strong className="text-slate-800">82%</strong>
               </div>
             </div>
           </div>
