@@ -28,7 +28,7 @@ const STAT_CARDS = [
         <line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
     ),
-    label: "Scam Sites Blocked",
+    label: "Scam Sites Detected",
     color: "text-red-500",
     bg: "bg-red-50",
   },

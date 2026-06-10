@@ -24,7 +24,7 @@ FT-22,API client,Non-ok throws backend detail,fetch 400 with {detail:'bad'},Thro
 FT-23,API client,login posts to /auth/login,api.login(email,pw) · mocked fetch,POST /auth/login with JSON body,,,
 FT-24,Admin page,Status filter includes SUBMITTED,Render AdminPage,Dropdown contains 'SUBMITTED',,xfail,BUG-2 — admin dropdown currently missing SUBMITTED (it.failing until fixed)
 FT-25,Admin page,Status filter shows all 8 statuses,Render AdminPage,Dropdown has ALL + 8 SRS statuses,,xfail,BUG-2 — same root cause as FT-24
-FT-26,Search page,Hardcoded AI confidence literal,search/page.tsx source,Source still contains literal '82%',,,BUG-4 — documents hardcoded value; flip when real confidence wired
+FT-26,Search page,Hardcoded AI confidence removed,search/page.tsx source,Source no longer contains '82%' / 'AI Confidence',,,BUG-4 FIXED — fake confidence stat removed; guards against regression
 FT-27,Search page,Unauthorized search shows error,searchUrl rejects with 'Unauthorized',Error message rendered (no redirect),,xfail,BUG-1 — should redirect to /login; currently only shows error (it.failing until fixed)
 FT-28,URL helper,withScheme prepends https to bare domain,"withScheme('coupang.com/x')",Returns 'https://coupang.com/x',,,BUG-FIX — bare domains were rejected with 422 'relative URL without a base'
 FT-29,URL helper,withScheme leaves schemed URL unchanged,http/https/whitespace/empty inputs,Existing scheme preserved · trimmed · '' stays '',,,
